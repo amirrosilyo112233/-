@@ -155,7 +155,10 @@ app.post('/api/books/:id/chat', async (req, res) => {
     res.json({ message: reply });
   } catch (err) {
     console.error('Chat error:', err.message);
-    res.status(500).json({ error: err.message, message: 'מצטער, הייתה שגיאה. נסה שוב.' });
+    const userMsg = err.message?.includes('quota') ? 'הגעת למגבלת השימוש היומית של Gemini'
+      : err.message?.includes('token') || err.message?.includes('context') ? 'הספר גדול מדי לקליטה. נסה ספר קטן יותר.'
+      : `שגיאה: ${err.message?.substring(0, 200) || 'לא ידוע'}`;
+    res.status(500).json({ error: err.message, message: userMsg });
   }
 });
 
