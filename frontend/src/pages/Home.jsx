@@ -12,7 +12,6 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
   const [lang, setLang] = useState('en');
   const [files, setFiles] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [debug, setDebug] = useState('');
   const fileInputRef = useRef(null);
 
   function addFiles(newFiles) {
@@ -41,9 +40,19 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
     form.append('title', title || files[0]?.name?.replace(/\.[^.]+$/, '') || 'ספר חדש');
     form.append('language', lang);
     files.forEach(f => form.append('files', f));
-    await fetch('/api/books/upload', { method: 'POST', body: form });
-    setTitle(''); setFiles([]); setShowForm(false);
-    await onRefresh();
+    try {
+      const res = await fetch('/api/books/upload', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`שגיאה בהעלאה: ${data.error || res.status}`);
+        setUploading(false);
+        return;
+      }
+      setTitle(''); setFiles([]); setShowForm(false);
+      await onRefresh();
+    } catch (err) {
+      alert('שגיאת רשת: ' + err.message);
+    }
     setUploading(false);
   }
 
@@ -111,52 +120,35 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
               <option value="he">🇮🇱 עברית</option>
             </select>
 
-            {/* DEBUG: visible file input - no hiding, no label, just the input */}
-            <div style={{
-              padding: 12, marginBottom: 12,
-              background: '#FFF9E6', border: '2px solid #C8A658',
-              borderRadius: 12
-            }}>
-              <div style={{ fontSize: 12, color: '#7A6E5F', marginBottom: 8, fontWeight: 700 }}>
-                v.6 — בחר קבצים מתחת:
-              </div>
-              <input
-                type="file"
-                multiple
-                onChange={e => {
-                  const log = [];
-                  log.push(`[${new Date().toLocaleTimeString('he-IL')}] onChange fired`);
-                  log.push(`target.files exists: ${!!e.target.files}`);
-                  log.push(`target.files.length: ${e.target.files?.length || 0}`);
-                  if (e.target.files && e.target.files.length > 0) {
-                    log.push(`first name: ${e.target.files[0].name}`);
-                    log.push(`first size: ${e.target.files[0].size} bytes`);
-                    log.push(`first type: ${e.target.files[0].type}`);
-                    try {
-                      const arr = Array.from(e.target.files);
-                      addFiles(arr);
-                      log.push(`✓ addFiles called with ${arr.length} files`);
-                    } catch (err) {
-                      log.push(`✗ Error: ${err.message}`);
-                    }
-                  }
-                  setDebug(log.join('\n'));
-                }}
-                style={{
-                  width: '100%', fontSize: 16, padding: 8,
-                  background: '#fff', border: '1px solid #ccc', borderRadius: 6
-                }}
-              />
-              {debug && (
-                <pre style={{
-                  marginTop: 10, padding: 10, background: '#fff',
-                  border: '1px solid #ddd', borderRadius: 6,
-                  fontSize: 11, whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace', color: '#333',
-                  maxHeight: 200, overflow: 'auto'
-                }}>{debug}</pre>
-              )}
-            </div>
+            {/* File picker */}
+            <input
+              id="book-file-input"
+              type="file"
+              multiple
+              onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  addFiles(Array.from(e.target.files));
+                }
+                e.target.value = '';
+              }}
+              style={{
+                position: 'absolute', left: '-100vw', top: 0,
+                width: 1, height: 1, opacity: 0
+              }}
+            />
+            <label
+              htmlFor="book-file-input"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                background: 'var(--elevated)', border: '1.5px dashed var(--border-strong)',
+                borderRadius: 12, padding: '14px 16px',
+                color: 'var(--gold)', fontSize: 14, fontWeight: 600,
+                marginBottom: 12, cursor: 'pointer', userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent'
+              }}
+            >
+              <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר קבצים — PDF / טקסט / תמונות'}
+            </label>
 
             {/* Files list with order */}
             {files.length > 0 && (

@@ -9,11 +9,14 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./db');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 500 * 1024 * 1024, files: 30 }
+});
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 const { buildPrompt } = require('./tutor-style');
 
