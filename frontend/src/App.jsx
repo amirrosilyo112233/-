@@ -3,13 +3,29 @@ import Home from './pages/Home';
 import Chat from './pages/Chat';
 import FieldLog from './pages/FieldLog';
 import Archive from './pages/Archive';
+import Lock from './pages/Lock';
 
 export default function App() {
+  const [unlocked, setUnlocked] = useState(() =>
+    sessionStorage.getItem('app_unlocked') === '1'
+  );
   const [page, setPage] = useState('home');
   const [activeBook, setActiveBook] = useState(null);
   const [books, setBooks] = useState([]);
+  const [installPrompt, setInstallPrompt] = useState(null);
 
-  useEffect(() => { loadBooks(); }, []);
+  useEffect(() => {
+    if (unlocked) loadBooks();
+  }, [unlocked]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   async function loadBooks() {
     const res = await fetch('/api/books');
@@ -18,6 +34,22 @@ export default function App() {
 
   function openBook(book) { setActiveBook(book); setPage('chat'); }
   function openArchive(book) { setActiveBook(book); setPage('archive'); }
+
+  async function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  }
+
+  function lockApp() {
+    sessionStorage.removeItem('app_unlocked');
+    setUnlocked(false);
+  }
+
+  if (!unlocked) {
+    return <Lock onUnlock={() => setUnlocked(true)} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -53,6 +85,27 @@ export default function App() {
         <div style={{ display: 'flex', gap: 6 }}>
           <NavBtn active={page === 'home'} onClick={() => setPage('home')} icon={<HomeIcon />}>בית</NavBtn>
           <NavBtn active={page === 'log'} onClick={() => setPage('log')} icon={<BookmarkIcon />}>יומן שטח</NavBtn>
+          {installPrompt && (
+            <button onClick={installApp} style={{
+              background: 'linear-gradient(135deg, var(--gold), var(--coral))',
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '7px 14px', cursor: 'pointer',
+              fontFamily: 'Rubik', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 5,
+              boxShadow: 'var(--shadow-accent)'
+            }}>
+              <DownloadIcon /> התקן
+            </button>
+          )}
+          <button onClick={lockApp} title="נעל" style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: 10, padding: '7px 10px',
+            cursor: 'pointer', color: 'var(--text-soft)',
+            display: 'flex', alignItems: 'center'
+          }}>
+            <LockSmIcon />
+          </button>
         </div>
       </nav>
 
@@ -117,6 +170,25 @@ function BookmarkIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function LockSmIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }
