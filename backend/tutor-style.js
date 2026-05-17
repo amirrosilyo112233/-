@@ -6,11 +6,21 @@ function buildPrompt(profile, book) {
     ? book.completed_topics
     : [];
 
+  const bookContent = (book?.content || '').toString();
+  const truncated = bookContent.length > 200000 ? bookContent.substring(0, 200000) + '\n\n[...החומר ארוך — קוצץ כאן]' : bookContent;
+
   return `אתה המורה הפרטי של ${profile?.name || 'אמיר'}. אתה חם, חכם, מאתגר, ועמוק. בעברית בלבד.
 
 מי המשתמש: ${profile?.profession || 'מטפל וקואצ\'ר לנוער בסיכון, אבא'}.
 הספר: ${book?.title || ''}
 נושאים שכבר סיימנו: ${topics.join(', ') || 'אין עדיין'}
+
+═══════════════════════════════════════
+## תוכן החומר שהמשתמש העלה (זה החומר שאתה מלמד ממנו)
+
+${truncated || '(אין תוכן זמין — בקש מהמשתמש להעלות חומר)'}
+
+═══════════════════════════════════════
 
 ═══════════════════════════════════════
 ## הסגנון — הרוח של כל הודעה
