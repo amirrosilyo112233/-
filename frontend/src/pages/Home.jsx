@@ -110,35 +110,46 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
               <option value="he">🇮🇱 עברית</option>
             </select>
 
-            {/* File picker - button + hidden ref input (mobile-friendly) */}
+            {/* File picker - label+id pattern (most reliable cross-platform) */}
             <input
-              ref={fileInputRef}
+              id="book-file-input"
               type="file"
               multiple
-              accept="*/*"
               onChange={e => {
                 const selected = e.target.files;
-                if (selected && selected.length > 0) {
-                  addFiles(selected);
+                const count = selected ? selected.length : 0;
+                if (count === 0) {
+                  alert('שלב 1: onChange נורה אבל לא חזרו קבצים. הקובץ אולי מסונכרן עם ענן ולא הורד עדיין.');
+                  return;
+                }
+                try {
+                  const arr = Array.from(selected);
+                  addFiles(arr);
+                  alert(`✓ נוספו ${arr.length} קבצים. ראשון: ${arr[0].name} (${Math.round(arr[0].size/1024)}KB)`);
+                } catch (err) {
+                  alert('שגיאה בקריאת הקבצים: ' + err.message);
                 }
                 e.target.value = '';
               }}
-              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              style={{
+                position: 'absolute', left: '-100vw', top: 0,
+                width: 1, height: 1, opacity: 0,
+                pointerEvents: 'none'
+              }}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
+            <label
+              htmlFor="book-file-input"
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 background: 'var(--elevated)', border: '1.5px dashed var(--border-strong)',
                 borderRadius: 12, padding: '14px 16px',
                 color: 'var(--gold)', fontSize: 14, fontWeight: 600,
-                marginBottom: 12, cursor: 'pointer', width: '100%',
-                fontFamily: 'inherit', transition: 'all 0.2s'
+                marginBottom: 12, cursor: 'pointer', userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent'
               }}
             >
               <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר קבצים — PDF / טקסט / תמונות'}
-            </button>
+            </label>
 
             {/* Files list with order */}
             {files.length > 0 && (
