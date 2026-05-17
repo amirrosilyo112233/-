@@ -109,23 +109,35 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
               <option value="he">🇮🇱 עברית</option>
             </select>
 
-            {/* File picker */}
-            <label style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: 'var(--elevated)', border: '1.5px dashed var(--border-strong)',
-              borderRadius: 12, padding: '14px 16px',
-              color: 'var(--gold)', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-              marginBottom: 12, transition: 'all 0.2s'
-            }}>
-              <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר PDF / TXT / תמונות'}
+            {/* File picker - mobile-friendly */}
+            <div style={{ position: 'relative', marginBottom: 12 }}>
               <input
                 type="file"
-                accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,.gif"
                 multiple
-                style={{ display: 'none' }}
-                onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+                accept="*/*"
+                onChange={e => {
+                  const selected = e.target.files;
+                  if (selected && selected.length > 0) {
+                    addFiles(selected);
+                  }
+                  e.target.value = '';
+                }}
+                style={{
+                  position: 'absolute', inset: 0, opacity: 0,
+                  cursor: 'pointer', width: '100%', height: '100%',
+                  fontSize: 0, zIndex: 2
+                }}
               />
-            </label>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                background: 'var(--elevated)', border: '1.5px dashed var(--border-strong)',
+                borderRadius: 12, padding: '14px 16px',
+                color: 'var(--gold)', fontSize: 14, fontWeight: 600,
+                pointerEvents: 'none'
+              }}>
+                <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר קבצים — PDF / טקסט / תמונות'}
+              </div>
+            </div>
 
             {/* Files list with order */}
             {files.length > 0 && (
