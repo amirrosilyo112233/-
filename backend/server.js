@@ -237,7 +237,7 @@ ${previousChapters.length > 0 ? `נושאים קודמים שכבר נלמדו: 
 });
 
 // ── Chapter Q&A ───────────────────────────────────────────────────────────────
-app.get('/api/chapters/:id/qa', (req, res) => {
+app.get('/api/chapters/:id/qa', async (req, res) => {
   res.json(await db.getChapterQA(req.params.id));
 });
 
