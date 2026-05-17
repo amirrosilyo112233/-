@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 function parseTopics(topics) {
   if (!topics) return [];
@@ -12,6 +12,7 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
   const [lang, setLang] = useState('en');
   const [files, setFiles] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const fileInputRef = useRef(null);
 
   function addFiles(newFiles) {
     setFiles(prev => [...prev, ...Array.from(newFiles)]);
@@ -109,38 +110,35 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
               <option value="he">🇮🇱 עברית</option>
             </select>
 
-            {/* File picker - mobile-friendly */}
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <input
-                type="file"
-                multiple
-                accept="*/*"
-                onChange={e => {
-                  const selected = e.target.files;
-                  const count = selected ? selected.length : 0;
-                  if (count > 0) {
-                    addFiles(selected);
-                  } else {
-                    alert('לא נבחר קובץ. נסה שוב.');
-                  }
-                  e.target.value = '';
-                }}
-                style={{
-                  position: 'absolute', inset: 0, opacity: 0,
-                  cursor: 'pointer', width: '100%', height: '100%',
-                  fontSize: 0, zIndex: 2
-                }}
-              />
-              <div style={{
+            {/* File picker - button + hidden ref input (mobile-friendly) */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="*/*"
+              onChange={e => {
+                const selected = e.target.files;
+                if (selected && selected.length > 0) {
+                  addFiles(selected);
+                }
+                e.target.value = '';
+              }}
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 background: 'var(--elevated)', border: '1.5px dashed var(--border-strong)',
                 borderRadius: 12, padding: '14px 16px',
                 color: 'var(--gold)', fontSize: 14, fontWeight: 600,
-                pointerEvents: 'none'
-              }}>
-                <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר קבצים — PDF / טקסט / תמונות'}
-              </div>
-            </div>
+                marginBottom: 12, cursor: 'pointer', width: '100%',
+                fontFamily: 'inherit', transition: 'all 0.2s'
+              }}
+            >
+              <ClipIcon /> {files.length > 0 ? `הוסף עוד קבצים (${files.length} נבחרו)` : 'בחר קבצים — PDF / טקסט / תמונות'}
+            </button>
 
             {/* Files list with order */}
             {files.length > 0 && (
