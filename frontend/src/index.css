@@ -260,8 +260,26 @@ button { font-family: inherit; }
 
   .card { padding: 16px; border-radius: 14px; }
 
-  /* Allow horizontal scroll on small screens for items */
   ::-webkit-scrollbar { width: 4px; }
+
+  /* Hide tagline on mobile */
+  .tagline { display: none; }
+
+  /* Navbar mobile layout */
+  .app-navbar { padding: 8px 12px !important; }
+  .app-navbar > div { gap: 6px !important; }
+
+  /* Smaller nav buttons */
+  .app-navbar button {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-navbar > div:first-child > div:last-child > div:first-child {
+    font-size: 14px !important;
+  }
 }
 
 /* Touch-friendly buttons */

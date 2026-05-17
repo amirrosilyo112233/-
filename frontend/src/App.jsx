@@ -55,30 +55,31 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <nav style={{
+      <nav className="app-navbar" style={{
         background: 'rgba(248,241,229,0.85)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
         borderBottom: '1px solid var(--border)',
-        padding: '0 28px',
+        padding: '8px 16px',
         display: 'flex',
         alignItems: 'center',
-        height: 64,
+        minHeight: 60,
         position: 'sticky',
         top: 0,
         zIndex: 100,
         gap: 8,
-        boxShadow: '0 1px 0 rgba(120,90,50,0.04)'
+        boxShadow: '0 1px 0 rgba(120,90,50,0.04)',
+        flexWrap: 'wrap'
       }}>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div className="icon-circle" style={{ width: 36, height: 36, fontSize: 18 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div className="icon-circle" style={{ width: 34, height: 34, fontSize: 16 }}>
             <BookIcon />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', fontFamily: 'Heebo', lineHeight: 1.2 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', fontFamily: 'Heebo', lineHeight: 1.1 }}>
               המורה הפרטי שלי
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0.3 }}>
+            <div className="tagline" style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.3 }}>
               לימוד מעמיק. בקצב שלך.
             </div>
           </div>
