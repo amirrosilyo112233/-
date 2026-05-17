@@ -117,8 +117,11 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
                 accept="*/*"
                 onChange={e => {
                   const selected = e.target.files;
-                  if (selected && selected.length > 0) {
+                  const count = selected ? selected.length : 0;
+                  if (count > 0) {
                     addFiles(selected);
+                  } else {
+                    alert('לא נבחר קובץ. נסה שוב.');
                   }
                   e.target.value = '';
                 }}
