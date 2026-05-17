@@ -263,22 +263,42 @@ button { font-family: inherit; }
   ::-webkit-scrollbar { width: 4px; }
 
   /* Hide tagline on mobile */
-  .tagline { display: none; }
+  .tagline { display: none !important; }
 
-  /* Navbar mobile layout */
-  .app-navbar { padding: 8px 12px !important; }
-  .app-navbar > div { gap: 6px !important; }
-
-  /* Smaller nav buttons */
-  .app-navbar button {
-    padding: 5px 10px !important;
-    font-size: 12px !important;
+  /* Navbar: stack into 2 rows on mobile */
+  .app-navbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 10px 14px !important;
+    min-height: auto !important;
+    gap: 10px !important;
   }
-}
 
-@media (max-width: 420px) {
+  /* Title row */
+  .app-navbar > div:first-child {
+    margin-left: 0 !important;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  /* Buttons row */
+  .app-navbar > div:last-child {
+    display: flex !important;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px !important;
+    width: 100%;
+  }
+
+  /* Compact title */
   .app-navbar > div:first-child > div:last-child > div:first-child {
-    font-size: 14px !important;
+    font-size: 15px !important;
+  }
+
+  /* Compact nav buttons */
+  .app-navbar button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
   }
 }
 
