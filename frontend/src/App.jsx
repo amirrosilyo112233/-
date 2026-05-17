@@ -4,6 +4,8 @@ import Chat from './pages/Chat';
 import FieldLog from './pages/FieldLog';
 import Archive from './pages/Archive';
 import Lock from './pages/Lock';
+import Scripts from './pages/Scripts';
+import Insights from './pages/Insights';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() =>
@@ -82,9 +84,11 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <NavBtn active={page === 'home'} onClick={() => setPage('home')} icon={<HomeIcon />}>בית</NavBtn>
-          <NavBtn active={page === 'log'} onClick={() => setPage('log')} icon={<BookmarkIcon />}>יומן שטח</NavBtn>
+          <NavBtn active={page === 'insights'} onClick={() => setPage('insights')} icon={<SparkSmIcon />}>וואו</NavBtn>
+          <NavBtn active={page === 'scripts'} onClick={() => setPage('scripts')} icon={<ScrollSmIcon />}>תסריטים</NavBtn>
+          <NavBtn active={page === 'log'} onClick={() => setPage('log')} icon={<BookmarkIcon />}>יומן</NavBtn>
           {installPrompt && (
             <button onClick={installApp} style={{
               background: 'linear-gradient(135deg, var(--gold), var(--coral))',
@@ -121,6 +125,8 @@ export default function App() {
       {page === 'log' && (
         <FieldLog books={books} />
       )}
+      {page === 'scripts' && <Scripts />}
+      {page === 'insights' && <Insights />}
     </div>
   );
 }
@@ -180,6 +186,23 @@ function DownloadIcon() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function SparkSmIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+    </svg>
+  );
+}
+
+function ScrollSmIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+      <path d="M22 17H2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2z" />
     </svg>
   );
 }

@@ -135,6 +135,20 @@ app.post('/api/books/:id/chat', async (req, res) => {
     db.addMessage(bookId, 'assistant', reply);
     db.updateBook(bookId, {});
 
+    // Auto-save insight on "wow" moments
+    if (reply.includes('🔥')) {
+      const wowMatch = reply.match(/🔥[^\n]*/);
+      const topic = wowMatch ? wowMatch[0].substring(0, 200) : (book.current_chapter || 'כללי');
+      db.addInsight(bookId, message, topic);
+    }
+
+    // Auto-save script when tutor identifies one
+    if (reply.includes('🛑')) {
+      const nameMatch = reply.match(/🛑[^\n.]+/);
+      const name = nameMatch ? nameMatch[0].replace(/[🛑*"']/g, '').substring(0, 80).trim() : 'תסריט שזוהה';
+      db.addScript(name, reply.substring(0, 500), message.substring(0, 300));
+    }
+
     res.json({ message: reply });
   } catch (err) {
     console.error('Chat error:', err.message);
