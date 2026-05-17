@@ -21,11 +21,11 @@ app.use(express.json({ limit: '500mb' }));
 const { buildPrompt } = require('./tutor-style');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-app.get('/api/profile', (req, res) => res.json(db.getProfile()));
-app.put('/api/profile', (req, res) => { db.saveProfile(req.body); res.json({ ok: true }); });
+app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
+app.put('/api/profile', async (req, res) => { await db.saveProfile(req.body); res.json({ ok: true }); });
 
 // ── Books ─────────────────────────────────────────────────────────────────────
-app.get('/api/books', (req, res) => res.json(db.getBooks()));
+app.get('/api/books', async (req, res) => res.json(await db.getBooks()));
 
 // Accept up to 30 files (images, PDFs, TXT) — in order
 app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
@@ -83,7 +83,7 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
     const content = parts.join('\n\n');
     const finalTitle = title || files[0]?.originalname?.replace(/\.[^.]+$/, '') || 'ספר חדש';
 
-    const book = db.addBook({
+    const book = await db.addBook({
       title: finalTitle,
       language: language || 'en',
       content
@@ -96,14 +96,14 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
   }
 });
 
-app.delete('/api/books/:id', (req, res) => {
-  db.deleteBook(req.params.id);
+app.delete('/api/books/:id', async (req, res) => {
+  await db.deleteBook(req.params.id);
   res.json({ ok: true });
 });
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
-app.get('/api/books/:id/messages', (req, res) => {
-  res.json(db.getMessages(req.params.id));
+app.get('/api/books/:id/messages', async (req, res) => {
+  res.json(await db.getMessages(req.params.id));
 });
 
 app.post('/api/books/:id/chat', async (req, res) => {
@@ -111,13 +111,13 @@ app.post('/api/books/:id/chat', async (req, res) => {
     const { message } = req.body;
     const bookId = req.params.id;
 
-    const book = db.getBook(bookId);
+    const book = await db.getBook(bookId);
     if (!book) return res.status(404).json({ error: 'ספר לא נמצא' });
 
-    const profile = db.getProfile();
-    db.addMessage(bookId, 'user', message);
+    const profile = await db.getProfile();
+    await db.addMessage(bookId, 'user', message);
 
-    const history = db.getRecentMessages(bookId, 20);
+    const history = await db.getRecentMessages(bookId, 20);
     const systemPrompt = buildPrompt(profile, book);
 
     // Build Gemini history (exclude last user message)
@@ -135,21 +135,21 @@ app.post('/api/books/:id/chat', async (req, res) => {
     const result = await chat.sendMessage(message);
     const reply = result.response.text();
 
-    db.addMessage(bookId, 'assistant', reply);
-    db.updateBook(bookId, {});
+    await db.addMessage(bookId, 'assistant', reply);
+    await db.updateBook(bookId, {});
 
     // Auto-save insight on "wow" moments
     if (reply.includes('🔥')) {
       const wowMatch = reply.match(/🔥[^\n]*/);
       const topic = wowMatch ? wowMatch[0].substring(0, 200) : (book.current_chapter || 'כללי');
-      db.addInsight(bookId, message, topic);
+      await db.addInsight(bookId, message, topic);
     }
 
     // Auto-save script when tutor identifies one
     if (reply.includes('🛑')) {
       const nameMatch = reply.match(/🛑[^\n.]+/);
       const name = nameMatch ? nameMatch[0].replace(/[🛑*"']/g, '').substring(0, 80).trim() : 'תסריט שזוהה';
-      db.addScript(name, reply.substring(0, 500), message.substring(0, 300));
+      await db.addScript(name, reply.substring(0, 500), message.substring(0, 300));
     }
 
     res.json({ message: reply });
@@ -163,17 +163,17 @@ app.post('/api/books/:id/chat', async (req, res) => {
 });
 
 // ── Field Log ─────────────────────────────────────────────────────────────────
-app.get('/api/field-log', (req, res) => res.json(db.getFieldLog()));
+app.get('/api/field-log', async (req, res) => res.json(await db.getFieldLog()));
 
 app.post('/api/field-log', async (req, res) => {
   try {
     const { content, book_id } = req.body;
-    const book = book_id ? db.getBook(book_id) : null;
+    const book = book_id ? await db.getBook(book_id) : null;
     const prompt = `אמיר כתב: "${content}"\n${book ? `ספר: ${book.title}` : ''}\nתגיב בעברית קצר: שאל שאלת עומק, חבר לחומר, הצע לנסות מחר.`;
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const result = await model.generateContent(prompt);
     const aiResponse = result.response.text();
-    db.addFieldLog(book_id, content, aiResponse);
+    await db.addFieldLog(book_id, content, aiResponse);
     res.json({ response: aiResponse });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -181,8 +181,8 @@ app.post('/api/field-log', async (req, res) => {
 });
 
 // ── Chapters (Archive) ────────────────────────────────────────────────────────
-app.get('/api/books/:id/chapters', (req, res) => {
-  res.json(db.getChapters(req.params.id));
+app.get('/api/books/:id/chapters', async (req, res) => {
+  res.json(await db.getChapters(req.params.id));
 });
 
 app.post('/api/books/:id/chapters/complete', async (req, res) => {
@@ -190,11 +190,11 @@ app.post('/api/books/:id/chapters/complete', async (req, res) => {
     const { title } = req.body;
     const bookId = req.params.id;
 
-    const book = db.getBook(bookId);
+    const book = await db.getBook(bookId);
     if (!book) return res.status(404).json({ error: 'ספר לא נמצא' });
 
-    const messages = db.getMessages(bookId);
-    const previousChapters = db.getChapters(bookId);
+    const messages = await db.getMessages(bookId);
+    const previousChapters = await db.getChapters(bookId);
 
     // Build text of the recent conversation about this chapter
     const recent = messages.slice(-40).map(m => `${m.role === 'user' ? 'המשתמש' : 'המורה'}: ${m.content}`).join('\n\n');
@@ -228,7 +228,7 @@ ${previousChapters.length > 0 ? `נושאים קודמים שכבר נלמדו: 
     const summary = sumMatch ? sumMatch[1].trim() : text;
     const bridge = brMatch ? brMatch[1].trim() : '';
 
-    const chapter = db.addChapter(bookId, title, summary, bridge);
+    const chapter = await db.addChapter(bookId, title, summary, bridge);
     res.json(chapter);
   } catch (err) {
     console.error('Complete chapter error:', err.message);
@@ -238,18 +238,18 @@ ${previousChapters.length > 0 ? `נושאים קודמים שכבר נלמדו: 
 
 // ── Chapter Q&A ───────────────────────────────────────────────────────────────
 app.get('/api/chapters/:id/qa', (req, res) => {
-  res.json(db.getChapterQA(req.params.id));
+  res.json(await db.getChapterQA(req.params.id));
 });
 
 app.post('/api/chapters/:id/ask', async (req, res) => {
   try {
     const { question } = req.body;
-    const chapter = db.getChapter(req.params.id);
+    const chapter = await db.getChapter(req.params.id);
     if (!chapter) return res.status(404).json({ error: 'פרק לא נמצא' });
 
-    db.addChapterQA(chapter.id, 'user', question);
+    await db.addChapterQA(chapter.id, 'user', question);
 
-    const qaHistory = db.getChapterQA(chapter.id);
+    const qaHistory = await db.getChapterQA(chapter.id);
     const history = qaHistory.slice(-10, -1).map(q => ({
       role: q.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: q.content }]
@@ -271,7 +271,7 @@ ${chapter.bridge ? `הקשר לנושאים אחרים:\n${chapter.bridge}` : ''
     const result = await chat.sendMessage(question);
     const reply = result.response.text();
 
-    db.addChapterQA(chapter.id, 'assistant', reply);
+    await db.addChapterQA(chapter.id, 'assistant', reply);
     res.json({ message: reply });
   } catch (err) {
     console.error('Chapter Q&A error:', err.message);
@@ -313,8 +313,8 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // ── Other ─────────────────────────────────────────────────────────────────────
-app.get('/api/insights', (req, res) => res.json(db.getInsights()));
-app.get('/api/scripts', (req, res) => res.json(db.getScripts()));
+app.get('/api/insights', async (req, res) => res.json(await db.getInsights()));
+app.get('/api/scripts', async (req, res) => res.json(await db.getScripts()));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // In production, serve the built frontend
@@ -331,4 +331,13 @@ process.on('uncaughtException', err => console.error('שגיאה:', err.message)
 process.on('unhandledRejection', err => console.error('שגיאה async:', err?.message));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ שרת פועל על פורט ${PORT}`));
+
+// Initialize DB schema then start server
+db.initSchema()
+  .then(() => {
+    app.listen(PORT, () => console.log(`✅ שרת פועל על פורט ${PORT}`));
+  })
+  .catch(err => {
+    console.error('שגיאת אתחול מסד נתונים:', err.message);
+    app.listen(PORT, () => console.log(`⚠️  שרת פועל על פורט ${PORT} אך מסד הנתונים לא זמין`));
+  });
