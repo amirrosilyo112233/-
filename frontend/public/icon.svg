@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E11D2C"/>
+      <stop offset="100%" stop-color="#FF5C45"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <g transform="translate(96,128)" fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 32h128a32 32 0 0 1 32 32v192a24 24 0 0 0-24-24H16z"/>
+    <path d="M304 32H176a32 32 0 0 0-32 32v192a24 24 0 0 1 24-24h136z"/>
+  </g>
+  <text x="256" y="436" font-family="Arial, sans-serif" font-size="64" font-weight="800" fill="#FFFFFF" text-anchor="middle">מורה</text>
+</svg>
