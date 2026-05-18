@@ -143,12 +143,40 @@ export default function Chat({ book, onBack }) {
             width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)',
             display: 'flex', flexDirection: 'column', gap: 8
           }} className="fade-up">
+            {/* Quick actions */}
+            <div style={{
+              fontSize: 11, color: 'var(--muted)', fontWeight: 700,
+              letterSpacing: 1, padding: '6px 4px 2px'
+            }}>פעולות מהירות</div>
+            <button onClick={() => { setShowMenu(false); send('לא הבנתי — תסביר מזווית אחרת'); }} style={menuBtn}>
+              <span style={{ fontSize: 18 }}>🟢</span>
+              <span>לא הבנתי</span>
+            </button>
+            <button onClick={() => { setShowMenu(false); send('תאתגר אותי יותר'); }} style={menuBtn}>
+              <span style={{ fontSize: 18 }}>🔴</span>
+              <span>אתגר יותר</span>
+            </button>
+            <button onClick={() => { setShowMenu(false); send('תן לי דוגמה מהחיים שלי'); }} style={menuBtn}>
+              <span style={{ fontSize: 18 }}>🟡</span>
+              <span>דוגמה מחיי</span>
+            </button>
+            <button onClick={() => { setShowMenu(false); send('שמור את התובנה הזו'); }} style={menuBtn}>
+              <span style={{ fontSize: 18 }}>📌</span>
+              <span>שמור תובנה</span>
+            </button>
+
+            <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
+
+            <div style={{
+              fontSize: 11, color: 'var(--muted)', fontWeight: 700,
+              letterSpacing: 1, padding: '6px 4px 2px'
+            }}>כלים</div>
             <button onClick={() => { setShowMenu(false); setShowCompleteDialog(true); }} style={menuBtn}>
               <span style={{ color: 'var(--green)' }}><CheckIcon /></span>
               <span>סיים פרק</span>
             </button>
             <button onClick={() => { setShowMenu(false); setShowVoicePicker(true); }} style={menuBtn}>
-              <SpeakerIcon /> בחירת קול
+              <SpeakerIcon /> <span>בחירת קול</span>
             </button>
             <button onClick={() => { setAutoSpeak(!autoSpeak); if (autoSpeak) stop(); setShowMenu(false); }} style={menuBtn}>
               {autoSpeak ? <SpeakerIcon /> : <SpeakerOffIcon />}
