@@ -103,7 +103,8 @@ export async function speak(text, options = {}) {
 
   // Try cloud TTS first, fall back to browser if it fails
   let useCloud = true;
-  let nextPromise = fetchAudio(sentences[0]).catch(e => { console.error(e); return null; });
+  let cloudErrorShown = false;
+  let nextPromise = fetchAudio(sentences[0]).catch(e => { console.error('Cloud TTS error:', e.message); return { error: e.message }; });
 
   for (let i = 0; i < sentences.length; i++) {
     if (stopRequested) break;
@@ -112,15 +113,19 @@ export async function speak(text, options = {}) {
 
     const audioPromise = nextPromise;
     nextPromise = i + 1 < sentences.length && useCloud
-      ? fetchAudio(sentences[i + 1]).catch(e => { console.error(e); return null; })
+      ? fetchAudio(sentences[i + 1]).catch(e => { console.error('Cloud TTS error:', e.message); return { error: e.message }; })
       : Promise.resolve(null);
 
     try {
-      const audio = await audioPromise;
-      if (audio && !stopRequested) {
-        await playAudio(audio);
+      const result = await audioPromise;
+      if (typeof result === 'string' && !stopRequested) {
+        await playAudio(result);
       } else if (!stopRequested) {
-        // Cloud failed - fall back to browser
+        // Cloud failed - show error once, then fall back to browser
+        if (!cloudErrorShown && result?.error) {
+          cloudErrorShown = true;
+          console.warn('TTS Cloud failed:', result.error, '— using browser voice as fallback');
+        }
         useCloud = false;
         await browserSpeak(sentences[i]);
       }
