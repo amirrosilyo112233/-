@@ -1,5 +1,5 @@
 // Simple service worker for offline support
-const CACHE = 'my-tutor-v6';
+const CACHE = 'my-tutor-v8';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
