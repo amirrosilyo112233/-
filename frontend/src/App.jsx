@@ -56,31 +56,41 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', paddingBottom: 76 }}>
-      {/* Compact top header */}
+      {/* Prominent top header */}
       <header style={{
-        background: 'rgba(247,244,237,0.92)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        borderBottom: '1px solid var(--border)',
-        padding: '12px 16px',
+        background: 'linear-gradient(135deg, var(--primary) 0%, #2C4F7C 100%)',
+        borderBottom: 'none',
+        padding: '14px 18px',
         display: 'flex', alignItems: 'center',
         position: 'sticky', top: 0, zIndex: 50,
-        gap: 10
+        gap: 10,
+        boxShadow: '0 4px 20px rgba(30,58,95,0.20)'
       }}>
-        <div style={{ marginInlineEnd: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="icon-circle" style={{ width: 32, height: 32, borderRadius: 10 }}>
+        <div style={{ marginInlineEnd: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 12,
+            background: 'rgba(255,255,255,0.18)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', flexShrink: 0,
+            border: '1px solid rgba(255,255,255,0.25)'
+          }}>
             <BookIcon />
           </div>
           <div style={{
-            fontWeight: 800, fontSize: 16, color: 'var(--text)',
-            fontFamily: 'Heebo', lineHeight: 1.1
+            fontWeight: 800, fontSize: 17, color: '#FFFFFF',
+            fontFamily: 'Heebo', lineHeight: 1.1,
+            letterSpacing: '-0.2px'
           }}>
             המורה הפרטי שלי
           </div>
         </div>
         {installPrompt && (
           <button onClick={installApp} style={{
-            background: 'var(--primary)', color: '#fff', border: 'none',
+            background: 'rgba(255,255,255,0.18)',
+            backdropFilter: 'blur(8px)',
+            color: '#FFFFFF',
+            border: '1px solid rgba(255,255,255,0.25)',
             borderRadius: 10, padding: '7px 12px', cursor: 'pointer',
             fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
             display: 'flex', alignItems: 'center', gap: 5
@@ -89,9 +99,10 @@ export default function App() {
           </button>
         )}
         <button onClick={lockApp} title="נעל" style={{
-          background: 'transparent', border: '1px solid var(--border)',
+          background: 'rgba(255,255,255,0.12)',
+          border: '1px solid rgba(255,255,255,0.20)',
           borderRadius: 10, padding: '7px 9px', cursor: 'pointer',
-          color: 'var(--text-soft)', display: 'flex'
+          color: '#FFFFFF', display: 'flex'
         }}>
           <LockSmIcon />
         </button>
