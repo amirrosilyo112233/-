@@ -31,7 +31,7 @@ export default function Scripts() {
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>טוען...</div>
       ) : scripts.length === 0 ? (
         <div className="card fade-up" style={{ textAlign: 'center', padding: '50px 24px' }}>
-          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(220,38,38,0.08)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
+          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(30,58,95,0.08)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
             <ScrollIcon size={36} />
           </div>
           <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>אין תסריטים עדיין</h3>

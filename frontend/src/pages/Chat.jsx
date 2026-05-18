@@ -199,7 +199,7 @@ export default function Chat({ book, onBack }) {
               fontFamily: 'Rubik', fontSize: 16, resize: 'none',
               direction: 'rtl', outline: 'none', lineHeight: 1.5,
               transition: 'all 0.2s',
-              boxShadow: listening ? '0 0 0 4px rgba(225,29,44,0.12)' : 'var(--shadow)',
+              boxShadow: listening ? '0 0 0 4px rgba(30,58,95,0.12)' : 'var(--shadow)',
               maxHeight: 120, minHeight: 50
             }}
             rows={1}
@@ -281,7 +281,7 @@ export default function Chat({ book, onBack }) {
           {completedChapter.bridge && (
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>🌉 גשר לנושאים קודמים</div>
-              <div style={{ background: 'rgba(225,29,44,0.06)', border: '1px solid rgba(225,29,44,0.25)', padding: 14, borderRadius: 12, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto' }}>
+              <div style={{ background: 'rgba(30,58,95,0.06)', border: '1px solid rgba(30,58,95,0.25)', padding: 14, borderRadius: 12, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto' }}>
                 {completedChapter.bridge}
               </div>
             </div>
@@ -308,7 +308,7 @@ export default function Chat({ book, onBack }) {
               <div key={v.id} onClick={() => { setVoiceState(v.id); setVoice(v.id); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
-                  background: voice === v.id ? 'rgba(225,29,44,0.08)' : 'var(--surface)',
+                  background: voice === v.id ? 'rgba(30,58,95,0.08)' : 'var(--surface)',
                   border: '1px solid ' + (voice === v.id ? 'var(--gold)' : 'var(--border)'),
                   borderRadius: 12, cursor: 'pointer'
                 }}>
@@ -382,7 +382,7 @@ function MessageBlock({ message, isSpeaking, activeSentence, onSpeak }) {
             {hasVoice() && (
               <button onClick={onSpeak} style={{
                 marginInlineStart: 'auto',
-                background: isSpeaking ? 'rgba(225,29,44,0.20)' : 'transparent',
+                background: isSpeaking ? 'rgba(30,58,95,0.20)' : 'transparent',
                 border: '1px solid ' + (isSpeaking ? 'var(--gold)' : 'var(--border)'),
                 borderRadius: 16, padding: '4px 10px', cursor: 'pointer',
                 color: isSpeaking ? 'var(--gold)' : 'var(--muted)',

@@ -100,7 +100,7 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
             transition: 'all 0.2s',
             justifyContent: 'center'
           }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.background = 'rgba(220,38,38,0.06)'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.background = 'rgba(30,58,95,0.06)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--elevated)'; }}
           >
             <PlusIcon /> הוסף ספר חדש
@@ -192,7 +192,7 @@ export default function Home({ books, onOpenBook, onOpenArchive, onRefresh }) {
       {/* Book list */}
       {books.length === 0 ? (
         <div className="card fade-up" style={{ textAlign: 'center', padding: '60px 30px' }}>
-          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(220,38,38,0.10)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
+          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(30,58,95,0.10)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
             <BookOpenIcon size={36} />
           </div>
           <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>הספרייה שלך ריקה</h3>
@@ -222,7 +222,7 @@ function StatCard({ icon, value, label }) {
       borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-float)',
       transition: 'all 0.3s'
     }}>
-      <div style={{ display: 'inline-flex', padding: 8, background: 'rgba(220,38,38,0.10)', borderRadius: 10, marginBottom: 8, color: 'var(--gold)' }}>
+      <div style={{ display: 'inline-flex', padding: 8, background: 'rgba(30,58,95,0.10)', borderRadius: 10, marginBottom: 8, color: 'var(--gold)' }}>
         {icon}
       </div>
       <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', fontFamily: 'Heebo', lineHeight: 1 }}>{value}</div>
@@ -249,8 +249,8 @@ function BookCard({ book, index, onOpen, onArchive, onDelete }) {
       }}
       onClick={() => onOpen(book)}
       onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'rgba(225,29,44,0.35)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg), 0 0 0 1px rgba(225,29,44,0.10)';
+        e.currentTarget.style.borderColor = 'rgba(30,58,95,0.35)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-lg), 0 0 0 1px rgba(30,58,95,0.10)';
         e.currentTarget.style.transform = 'translateY(-4px)';
       }}
       onMouseLeave={e => {

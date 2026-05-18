@@ -31,7 +31,7 @@ export default function Insights() {
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>טוען...</div>
       ) : insights.length === 0 ? (
         <div className="card fade-up" style={{ textAlign: 'center', padding: '50px 24px' }}>
-          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(220,38,38,0.08)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
+          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(30,58,95,0.08)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
             <SparkIcon size={36} />
           </div>
           <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>אין רגעי וואו עדיין</h3>
