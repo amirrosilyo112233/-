@@ -1,0 +1,15 @@
+name: Keep App Awake
+
+on:
+  schedule:
+    - cron: '*/13 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render app
+        run: |
+          curl -fsS --max-time 60 https://s0qy0pjcwy.onrender.com/api/health || true
+          echo "Ping completed at $(date)"
