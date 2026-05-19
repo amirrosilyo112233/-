@@ -622,7 +622,12 @@ const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, on
               ))}
             </div>
           ) : (
-            <div>{renderRich(message.content)}</div>
+            <div>{(() => {
+              try { return renderRich(message.content); }
+              catch (e) {
+                return <div style={{ fontSize: 19, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>;
+              }
+            })()}</div>
           )
         )}
       </div>
