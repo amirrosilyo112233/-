@@ -31,7 +31,7 @@ export default function Archive({ book, onBack }) {
 
       {chapters.length === 0 ? (
         <div className="card fade-up" style={{ textAlign: 'center', padding: '60px 30px' }}>
-          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(30,58,95,0.10)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
+          <div style={{ display: 'inline-flex', padding: 18, background: 'rgba(200,132,61,0.10)', borderRadius: 20, marginBottom: 16, color: 'var(--gold)' }}>
             <BooksStack />
           </div>
           <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>אין פרקים בארכיון עדיין</h3>
@@ -145,7 +145,7 @@ function ChapterView({ chapter, onBack }) {
       {tab === 'bridge' && chapter.bridge && (
         <div className="card fade-up" style={{
           lineHeight: 1.85, whiteSpace: 'pre-wrap', fontSize: 15,
-          background: 'rgba(30,58,95,0.06)', border: '1px solid rgba(30,58,95,0.30)'
+          background: 'rgba(200,132,61,0.06)', border: '1px solid rgba(200,132,61,0.30)'
         }}>
           {chapter.bridge}
         </div>
@@ -169,11 +169,11 @@ function ChapterView({ chapter, onBack }) {
                 alignSelf: m.role === 'user' ? 'flex-start' : 'flex-end',
                 maxWidth: '82%',
                 background: m.role === 'user' ? 'var(--surface)' : 'var(--elevated)',
-                border: m.role === 'user' ? '1px solid var(--border)' : '1px solid rgba(30,58,95,0.30)',
+                border: m.role === 'user' ? '1px solid var(--border)' : '1px solid rgba(200,132,61,0.30)',
                 borderRadius: m.role === 'user' ? '14px 14px 14px 4px' : '14px 14px 4px 14px',
                 padding: '12px 16px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap',
                 color: 'var(--text)',
-                boxShadow: m.role === 'assistant' ? '0 2px 8px rgba(30,58,95,0.08)' : 'var(--shadow-sm)'
+                boxShadow: m.role === 'assistant' ? '0 2px 8px rgba(200,132,61,0.08)' : 'var(--shadow-sm)'
               }}>
                 {m.content}
               </div>

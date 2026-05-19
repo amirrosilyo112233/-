@@ -58,13 +58,13 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', paddingBottom: 76 }}>
       {/* Prominent top header */}
       <header style={{
-        background: 'linear-gradient(135deg, var(--primary) 0%, #2C4F7C 100%)',
+        background: 'linear-gradient(135deg, #C8843D 0%, #D99858 100%)',
         borderBottom: 'none',
         padding: '14px 18px',
         display: 'flex', alignItems: 'center',
         position: 'sticky', top: 0, zIndex: 50,
         gap: 10,
-        boxShadow: '0 4px 20px rgba(30,58,95,0.20)'
+        boxShadow: '0 4px 20px rgba(120,80,30,0.22)'
       }}>
         <div style={{ marginInlineEnd: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
@@ -128,7 +128,7 @@ export default function App() {
         padding: '8px 8px 20px',
         display: 'flex', justifyContent: 'space-around',
         zIndex: 100,
-        boxShadow: '0 -2px 12px rgba(30,58,95,0.05)'
+        boxShadow: '0 -2px 12px rgba(80,55,25,0.08)'
       }}>
         <TabBtn active={page === 'home'} onClick={() => setPage('home')} icon={<HomeIcon />} label="בית" />
         <TabBtn active={page === 'insights'} onClick={() => setPage('insights')} icon={<SparkIcon />} label="וואו" />

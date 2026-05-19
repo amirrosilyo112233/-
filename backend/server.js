@@ -77,7 +77,7 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
         parts.push(`--- קובץ ${i + 1}: ${file.originalname} (שגיאה בעיבוד) ---`);
       }
 
-      fs.unlinkSync(file.path);
+      try { fs.unlinkSync(file.path); } catch (e) { console.warn('Cleanup failed:', e.message); }
     }
 
     const content = parts.join('\n\n');
@@ -132,7 +132,7 @@ app.post('/api/books/:id/chat', async (req, res) => {
     }
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       systemInstruction: systemPrompt
     });
 

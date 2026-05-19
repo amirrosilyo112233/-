@@ -71,8 +71,8 @@ export default function FieldLog({ books }) {
       {response && (
         <div className="card fade-up" style={{
           marginBottom: 26,
-          border: '1px solid rgba(30,58,95,0.35)',
-          background: 'rgba(30,58,95,0.06)'
+          border: '1px solid rgba(200,132,61,0.35)',
+          background: 'rgba(200,132,61,0.06)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div className="icon-circle" style={{ width: 32, height: 32, borderRadius: 10 }}>

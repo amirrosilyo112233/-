@@ -35,21 +35,22 @@ export default function Chat({ book, onBack }) {
   }, [messages, book.id]);
 
   useEffect(() => {
-    // When a new assistant message arrives — scroll to its TOP, not the bottom
+    // Only react when messages array length changes (not on loading flicker)
+    const grew = messages.length > prevMsgCount.current;
+    if (!grew) return;
     const lastMsg = messages[messages.length - 1];
-    const isNewAssistant = messages.length > prevMsgCount.current && lastMsg?.role === 'assistant';
     prevMsgCount.current = messages.length;
 
     setTimeout(() => {
-      if (isNewAssistant && lastAssistantRef.current) {
+      if (lastMsg?.role === 'assistant' && lastAssistantRef.current) {
+        // New assistant reply — anchor to its TOP so user reads from the start
         lastAssistantRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (loading) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      } else if (!isNewAssistant) {
+      } else {
+        // User just sent — show input area / typing
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
-    }, 100);
-  }, [messages, loading]);
+    }, 80);
+  }, [messages]);
 
   async function loadMessages() {
     // 1. Show cached messages instantly
@@ -62,7 +63,7 @@ export default function Chat({ book, onBack }) {
       } catch (e) {}
     }
 
-    // 2. Fetch fresh in background
+    // 2. Fetch fresh in background — but only overwrite if server has MORE messages
     try {
       const res = await fetch(`/api/books/${book.id}/messages`);
       const data = await res.json();
@@ -70,7 +71,8 @@ export default function Chat({ book, onBack }) {
         if (data.length === 0 && !cached) {
           send('התחל ללמד אותי את הספר הזה');
         } else if (data.length > 0) {
-          setMessages(data);
+          // Use functional setMessages to avoid stale state — only update if server has equal or more messages
+          setMessages(prev => (data.length >= prev.length ? data : prev));
           localStorage.setItem(cacheKey, JSON.stringify(data));
         }
       }
@@ -89,16 +91,24 @@ export default function Chat({ book, onBack }) {
     setMessages(prev => [...prev, { role: 'user', content: msg }]);
     inputRef.current?.focus();
 
-    const res = await fetch(`/api/books/${book.id}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg })
-    });
-    const data = await res.json();
-    if (data.message) {
-      const newIdx = messages.length + 1;
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
-      if (autoSpeak) handleSpeak(data.message, newIdx);
+    try {
+      const res = await fetch(`/api/books/${book.id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        // Show error to user
+        const errMsg = data.message || data.error || 'שגיאה לא צפויה';
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${errMsg}` }]);
+      } else if (data.message) {
+        const newIdx = messages.length + 1;
+        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        if (autoSpeak) handleSpeak(data.message, newIdx);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ שגיאת רשת: ${err.message}` }]);
     }
     setLoading(false);
   }
@@ -249,7 +259,7 @@ export default function Chat({ book, onBack }) {
       {/* Single-column messages */}
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: '20px 14px 100px',
+        padding: '20px 14px 180px',
         display: 'flex', flexDirection: 'column', gap: 0,
         maxWidth: 720, width: '100%', margin: '0 auto'
       }}>
@@ -291,7 +301,7 @@ export default function Chat({ book, onBack }) {
               fontFamily: 'Rubik', fontSize: 16, resize: 'none',
               direction: 'rtl', outline: 'none', lineHeight: 1.5,
               transition: 'all 0.2s',
-              boxShadow: listening ? '0 0 0 4px rgba(30,58,95,0.12)' : 'var(--shadow)',
+              boxShadow: listening ? '0 0 0 4px rgba(200,132,61,0.12)' : 'var(--shadow)',
               maxHeight: 120, minHeight: 50
             }}
             rows={1}
@@ -373,7 +383,7 @@ export default function Chat({ book, onBack }) {
           {completedChapter.bridge && (
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 700, letterSpacing: 1 }}>🌉 גשר לנושאים קודמים</div>
-              <div style={{ background: 'rgba(30,58,95,0.06)', border: '1px solid rgba(30,58,95,0.25)', padding: 14, borderRadius: 12, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto' }}>
+              <div style={{ background: 'rgba(200,132,61,0.06)', border: '1px solid rgba(200,132,61,0.25)', padding: 14, borderRadius: 12, fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto' }}>
                 {completedChapter.bridge}
               </div>
             </div>
@@ -400,7 +410,7 @@ export default function Chat({ book, onBack }) {
               <div key={v.id} onClick={() => { setVoiceState(v.id); setVoice(v.id); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
-                  background: voice === v.id ? 'rgba(30,58,95,0.08)' : 'var(--surface)',
+                  background: voice === v.id ? 'rgba(200,132,61,0.08)' : 'var(--surface)',
                   border: '1px solid ' + (voice === v.id ? 'var(--gold)' : 'var(--border)'),
                   borderRadius: 12, cursor: 'pointer'
                 }}>
@@ -496,14 +506,14 @@ function renderRich(text) {
     if (emojiMatch) {
       const bgColor = {
         '🔥': 'rgba(245,158,11,0.06)',
-        '🎯': 'rgba(30,58,95,0.05)',
+        '🎯': 'rgba(200,132,61,0.05)',
         '🛑': 'rgba(220,38,38,0.05)',
         '🏠': 'rgba(16,185,129,0.05)',
         '💡': 'rgba(245,158,11,0.06)',
-        '📌': 'rgba(30,58,95,0.05)',
-        '⏱️': 'rgba(30,58,95,0.05)',
-        '⚖️': 'rgba(30,58,95,0.05)',
-        '🎬': 'rgba(30,58,95,0.05)',
+        '📌': 'rgba(200,132,61,0.05)',
+        '⏱️': 'rgba(200,132,61,0.05)',
+        '⚖️': 'rgba(200,132,61,0.05)',
+        '🎬': 'rgba(200,132,61,0.05)',
       }[emojiMatch[1]] || 'transparent';
       const borderColor = {
         '🔥': 'var(--accent-gold)',
@@ -590,7 +600,7 @@ const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, on
             {hasVoice() && (
               <button onClick={onSpeak} style={{
                 marginInlineStart: 'auto',
-                background: isSpeaking ? 'rgba(30,58,95,0.15)' : 'transparent',
+                background: isSpeaking ? 'rgba(200,132,61,0.15)' : 'transparent',
                 border: '1px solid ' + (isSpeaking ? 'var(--primary)' : 'var(--border)'),
                 borderRadius: 16, padding: '4px 10px', cursor: 'pointer',
                 color: isSpeaking ? 'var(--primary)' : 'var(--muted)',

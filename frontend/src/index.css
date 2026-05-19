@@ -3,52 +3,63 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Calm Premium Palette - Deep Navy + Warm Cream */
-  --bg:        #F7F4ED;
-  --bg-soft:   #FFFFFF;
-  --surface:   #FFFFFF;
-  --surface-glass: rgba(255,255,255,0.85);
-  --elevated:  #FAF6EE;
-  --hover:     #F2EDE2;
+  /* Coffee Shop / Warm Latte Palette */
+  --bg:        #EFE5D4;          /* warm latte cream */
+  --bg-soft:   #F8F1E5;
+  --surface:   #F8F1E5;          /* card cream */
+  --surface-glass: rgba(248,241,229,0.92);
+  --elevated:  #FCF6EA;
+  --hover:     #EADFCA;
 
-  /* Primary - deep navy (trust, focus, knowledge) */
-  --primary:      #1E3A5F;
-  --primary-soft: #2C4F7C;
-  --primary-pale: #E8EEF5;
+  /* Primary - golden caramel (warm, inviting) */
+  --primary:      #C8843D;       /* warm gold */
+  --primary-soft: #D99858;
+  --primary-pale: #F5E8D2;
 
-  /* Subtle warm accent */
-  --gold:      #1E3A5F;
-  --gold-soft: #2C4F7C;
-  --coral:     #2C4F7C;
-  --accent-gold: #B89968;
+  /* Accents */
+  --gold:        #C8843D;
+  --gold-soft:   #D99858;
+  --coral:       #D97757;        /* warm coral */
+  --accent-gold: #C8843D;
 
   /* Status colors */
-  --green:     #10B981;
-  --green-pale: #ECFDF5;
-  --warn:      #F59E0B;
-  --warn-pale: #FFFBEB;
-  --error:     #DC2626;
+  --green:     #5C8A5C;          /* soft olive */
+  --green-pale: #E8F0E2;
+  --warn:      #D9941F;
+  --warn-pale: #FBF1DC;
+  --error:     #C0392B;
 
-  /* Text */
-  --text:      #1F2937;
-  --text-soft: #4B5563;
-  --muted:     #6B7280;
-  --muted-soft: #9CA3AF;
+  /* Text - deep warm brown */
+  --text:      #2A2520;
+  --text-soft: #5C5042;
+  --muted:     #7A6E5F;
+  --muted-soft: #A89A85;
 
-  /* Borders */
-  --border:    #E5E1D8;
-  --border-strong: #D4CFC4;
-  --border-glass: rgba(0,0,0,0.06);
+  /* Borders - warm cream tones */
+  --border:    #E0D5C2;
+  --border-strong: #C9BBA3;
+  --border-glass: rgba(120,90,50,0.08);
 
-  --radius:    18px;
+  --radius:    16px;
   --radius-sm: 12px;
   --radius-pill: 999px;
 
-  /* Soft shadows */
-  --shadow-sm: 0 1px 2px rgba(30,58,95,0.05);
-  --shadow:    0 4px 12px rgba(30,58,95,0.08), 0 1px 3px rgba(30,58,95,0.04);
-  --shadow-lg: 0 12px 32px rgba(30,58,95,0.12), 0 4px 8px rgba(30,58,95,0.05);
-  --shadow-accent: 0 4px 16px rgba(30,58,95,0.20);
+  /* Warm raised shadows - like books on a shelf */
+  --shadow-sm: 0 1px 2px rgba(80,55,25,0.06);
+  --shadow:    0 4px 12px rgba(80,55,25,0.10), 0 1px 3px rgba(80,55,25,0.05);
+  --shadow-lg: 0 14px 36px rgba(80,55,25,0.14), 0 4px 10px rgba(80,55,25,0.07);
+  --shadow-accent: 0 4px 16px rgba(200,132,61,0.28);
+  --shadow-gold:   0 4px 14px rgba(200,132,61,0.32);
+  --shadow-float:  0 6px 18px rgba(80,55,25,0.10), 0 2px 4px rgba(80,55,25,0.05);
+}
+
+/* Golden left-bar accent — like a bookmark ribbon */
+.gold-bar {
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--coral) 100%);
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(200,132,61,0.35);
 }
 
 html, body {
@@ -72,7 +83,7 @@ body {
 
 p, div, span { font-weight: inherit; }
 
-/* Richer aurora background */
+/* Warm coffee-shop aurora background */
 body::before {
   content: '';
   position: fixed;
@@ -80,11 +91,11 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 10% 0%, rgba(30,58,95,0.18) 0%, transparent 45%),
-    radial-gradient(ellipse at 90% 0%, rgba(184,153,104,0.20) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 100%, rgba(120,160,200,0.18) 0%, transparent 50%),
-    radial-gradient(circle at 30% 60%, rgba(180,140,180,0.10) 0%, transparent 40%);
-  filter: blur(20px);
+    radial-gradient(ellipse at 10% 0%, rgba(200,132,61,0.18) 0%, transparent 45%),
+    radial-gradient(ellipse at 90% 0%, rgba(217,119,87,0.16) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 100%, rgba(184,140,80,0.16) 0%, transparent 50%),
+    radial-gradient(circle at 30% 60%, rgba(160,110,70,0.10) 0%, transparent 40%);
+  filter: blur(22px);
 }
 
 ::-webkit-scrollbar { width: 6px; }
@@ -144,7 +155,7 @@ button { font-family: inherit; }
   min-height: 50px;
 }
 .btn-primary:hover {
-  background: #173050;
+  background: #A66A26;
   transform: translateY(-1px);
 }
 .btn-primary:active { transform: translateY(0); }
@@ -216,7 +227,7 @@ button { font-family: inherit; }
 }
 .input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(30,58,95,0.10);
+  box-shadow: 0 0 0 3px rgba(200,132,61,0.18);
 }
 .input::placeholder { color: var(--muted-soft); }
 
@@ -237,8 +248,8 @@ button { font-family: inherit; }
   align-items: center;
   gap: 5px;
   background: var(--primary-pale);
-  color: var(--primary);
-  border: 1px solid rgba(30,58,95,0.15);
+  color: #8A5A1F;
+  border: 1px solid rgba(200,132,61,0.25);
   border-radius: var(--radius-pill);
   padding: 4px 12px;
   font-size: 12px;
