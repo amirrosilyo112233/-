@@ -54,6 +54,7 @@ async function initSchema() {
       content TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE INDEX IF NOT EXISTS idx_messages_book_id ON messages(book_id, id);
   `);
   await q(`
     CREATE TABLE IF NOT EXISTS insights (

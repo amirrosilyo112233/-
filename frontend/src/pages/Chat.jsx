@@ -25,6 +25,15 @@ export default function Chat({ book, onBack }) {
 
   useEffect(() => { loadMessages(); return () => stop(); }, [book.id]);
 
+  // Keep cache in sync as conversation grows
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        localStorage.setItem(`msgs_${book.id}`, JSON.stringify(messages));
+      } catch (e) {}
+    }
+  }, [messages, book.id]);
+
   useEffect(() => {
     // When a new assistant message arrives — scroll to its TOP, not the bottom
     const lastMsg = messages[messages.length - 1];
@@ -43,12 +52,30 @@ export default function Chat({ book, onBack }) {
   }, [messages, loading]);
 
   async function loadMessages() {
-    const res = await fetch(`/api/books/${book.id}/messages`);
-    const data = await res.json();
-    if (data.length === 0) {
-      send('התחל ללמד אותי את הספר הזה');
-    } else {
-      setMessages(data);
+    // 1. Show cached messages instantly
+    const cacheKey = `msgs_${book.id}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+      } catch (e) {}
+    }
+
+    // 2. Fetch fresh in background
+    try {
+      const res = await fetch(`/api/books/${book.id}/messages`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        if (data.length === 0 && !cached) {
+          send('התחל ללמד אותי את הספר הזה');
+        } else if (data.length > 0) {
+          setMessages(data);
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+        }
+      }
+    } catch (e) {
+      console.error('Load messages failed:', e);
     }
   }
 
