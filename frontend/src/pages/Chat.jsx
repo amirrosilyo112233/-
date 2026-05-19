@@ -429,7 +429,7 @@ function renderRich(text) {
       const content = trimmed.replace(/^#+\s*/, '');
       return (
         <h3 key={pi} style={{
-          fontSize: level === 2 ? 22 : 19,
+          fontSize: level === 2 ? 25 : 22,
           fontWeight: 800,
           color: 'var(--primary)',
           fontFamily: 'Heebo',
@@ -500,7 +500,7 @@ function renderRich(text) {
     // Regular paragraph
     return (
       <p key={pi} style={{
-        fontSize: 17, lineHeight: 1.85,
+        fontSize: 19, lineHeight: 1.8, fontWeight: 500,
         margin: '12px 0',
         color: 'var(--text)'
       }}>{renderInline(trimmed)}</p>
@@ -578,10 +578,10 @@ const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, on
 
       <div style={{ paddingInlineStart: 42, color: 'var(--text)' }}>
         {isUser ? (
-          <div style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{message.content}</div>
+          <div style={{ fontSize: 19, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>
         ) : (
           isSpeaking && activeSentence >= 0 ? (
-            <div style={{ fontSize: 17, lineHeight: 1.85, whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 19, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
               {splitSentences(message.content).map((s, i) => (
                 <span key={i} style={{
                   background: i === activeSentence ? 'linear-gradient(180deg, transparent 55%, #FFE57F 55%)' : 'transparent',
