@@ -19,10 +19,28 @@ export default function Chat({ book, onBack }) {
   const [previewingId, setPreviewingId] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   const bottomRef = useRef(null);
+  const lastAssistantRef = useRef(null);
   const inputRef = useRef(null);
+  const prevMsgCount = useRef(0);
 
   useEffect(() => { loadMessages(); return () => stop(); }, [book.id]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+
+  useEffect(() => {
+    // When a new assistant message arrives — scroll to its TOP, not the bottom
+    const lastMsg = messages[messages.length - 1];
+    const isNewAssistant = messages.length > prevMsgCount.current && lastMsg?.role === 'assistant';
+    prevMsgCount.current = messages.length;
+
+    setTimeout(() => {
+      if (isNewAssistant && lastAssistantRef.current) {
+        lastAssistantRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (loading) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else if (!isNewAssistant) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+  }, [messages, loading]);
 
   async function loadMessages() {
     const res = await fetch(`/api/books/${book.id}/messages`);
@@ -208,15 +226,19 @@ export default function Chat({ book, onBack }) {
         display: 'flex', flexDirection: 'column', gap: 0,
         maxWidth: 720, width: '100%', margin: '0 auto'
       }}>
-        {messages.map((m, i) => (
-          <MessageBlock
-            key={i}
-            message={m}
-            isSpeaking={speakingId === i}
-            activeSentence={speakingId === i ? speakingSentence : -1}
-            onSpeak={() => handleSpeak(m.content, i)}
-          />
-        ))}
+        {messages.map((m, i) => {
+          const isLastAssistant = m.role === 'assistant' && i === messages.length - 1;
+          return (
+            <MessageBlock
+              key={i}
+              ref={isLastAssistant ? lastAssistantRef : null}
+              message={m}
+              isSpeaking={speakingId === i}
+              activeSentence={speakingId === i ? speakingSentence : -1}
+              onSpeak={() => handleSpeak(m.content, i)}
+            />
+          );
+        })}
         {loading && <TypingBlock />}
         <div ref={bottomRef} />
       </div>
@@ -394,18 +416,134 @@ export default function Chat({ book, onBack }) {
   );
 }
 
-function MessageBlock({ message, isSpeaking, activeSentence, onSpeak }) {
+function renderRich(text) {
+  // Split by double newline for paragraphs
+  const paragraphs = text.split(/\n{2,}/);
+  return paragraphs.map((p, pi) => {
+    const trimmed = p.trim();
+    if (!trimmed) return null;
+
+    // Heading (## or ###)
+    if (/^#{2,3}\s/.test(trimmed)) {
+      const level = trimmed.match(/^#+/)[0].length;
+      const content = trimmed.replace(/^#+\s*/, '');
+      return (
+        <h3 key={pi} style={{
+          fontSize: level === 2 ? 22 : 19,
+          fontWeight: 800,
+          color: 'var(--primary)',
+          fontFamily: 'Heebo',
+          margin: '20px 0 12px',
+          letterSpacing: '-0.2px'
+        }}>{renderInline(content)}</h3>
+      );
+    }
+
+    // Divider
+    if (trimmed === '---' || trimmed === '═══') {
+      return <hr key={pi} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '18px 0' }} />;
+    }
+
+    // Bullet list
+    if (/^[•\-\*]\s/.test(trimmed) || trimmed.includes('\n• ') || trimmed.includes('\n- ')) {
+      const items = trimmed.split('\n').filter(l => /^[•\-\*]\s/.test(l.trim()));
+      if (items.length >= 2) {
+        return (
+          <ul key={pi} style={{ margin: '12px 0', paddingInlineStart: 20, listStyle: 'none' }}>
+            {items.map((it, ii) => (
+              <li key={ii} style={{
+                marginBottom: 8, display: 'flex', gap: 10, alignItems: 'flex-start',
+                fontSize: 17, lineHeight: 1.7
+              }}>
+                <span style={{ color: 'var(--accent-gold)', fontSize: 20, lineHeight: 1, marginTop: 2 }}>•</span>
+                <span>{renderInline(it.trim().replace(/^[•\-\*]\s*/, ''))}</span>
+              </li>
+            ))}
+          </ul>
+        );
+      }
+    }
+
+    // Blockquote style for emoji-led paragraphs (🔥 🎯 🛑 🏠 💡)
+    const emojiMatch = trimmed.match(/^(🔥|🎯|🛑|🏠|💡|📌|⏱️|⚖️|🎬)\s/);
+    if (emojiMatch) {
+      const bgColor = {
+        '🔥': 'rgba(245,158,11,0.06)',
+        '🎯': 'rgba(30,58,95,0.05)',
+        '🛑': 'rgba(220,38,38,0.05)',
+        '🏠': 'rgba(16,185,129,0.05)',
+        '💡': 'rgba(245,158,11,0.06)',
+        '📌': 'rgba(30,58,95,0.05)',
+        '⏱️': 'rgba(30,58,95,0.05)',
+        '⚖️': 'rgba(30,58,95,0.05)',
+        '🎬': 'rgba(30,58,95,0.05)',
+      }[emojiMatch[1]] || 'transparent';
+      const borderColor = {
+        '🔥': 'var(--accent-gold)',
+        '🎯': 'var(--primary)',
+        '🛑': 'var(--error)',
+        '🏠': 'var(--green)',
+        '💡': 'var(--accent-gold)',
+      }[emojiMatch[1]] || 'var(--primary)';
+      return (
+        <div key={pi} style={{
+          background: bgColor,
+          borderInlineStart: `3px solid ${borderColor}`,
+          padding: '12px 14px',
+          borderRadius: '0 12px 12px 0',
+          margin: '12px 0',
+          fontSize: 17, lineHeight: 1.8
+        }}>{renderInline(trimmed)}</div>
+      );
+    }
+
+    // Regular paragraph
+    return (
+      <p key={pi} style={{
+        fontSize: 17, lineHeight: 1.85,
+        margin: '12px 0',
+        color: 'var(--text)'
+      }}>{renderInline(trimmed)}</p>
+    );
+  });
+}
+
+function renderInline(text) {
+  // Parse **bold**, *italic*, "quotes"
+  const parts = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*/s);
+    const quoteMatch = remaining.match(/^(.*?)"(.+?)"/s);
+
+    if (boldMatch && (!quoteMatch || boldMatch[1].length < quoteMatch[1].length)) {
+      if (boldMatch[1]) parts.push(<span key={key++}>{boldMatch[1]}</span>);
+      parts.push(<strong key={key++} style={{ color: 'var(--primary)', fontWeight: 800 }}>{boldMatch[2]}</strong>);
+      remaining = remaining.slice(boldMatch[0].length);
+    } else if (quoteMatch) {
+      if (quoteMatch[1]) parts.push(<span key={key++}>{quoteMatch[1]}</span>);
+      parts.push(<em key={key++} style={{ color: 'var(--accent-gold)', fontStyle: 'normal', fontWeight: 600 }}>"{quoteMatch[2]}"</em>);
+      remaining = remaining.slice(quoteMatch[0].length);
+    } else {
+      parts.push(<span key={key++}>{remaining}</span>);
+      break;
+    }
+  }
+  return parts;
+}
+
+const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, onSpeak }, ref) => {
   const isUser = message.role === 'user';
-  const sentences = (!isUser && isSpeaking && activeSentence >= 0) ? splitSentences(message.content) : null;
 
   return (
-    <div className="fade-up" style={{
-      padding: '18px 4px',
+    <div ref={ref} className="fade-up" style={{
+      padding: '20px 4px',
       borderBottom: '1px solid rgba(225,180,140,0.15)',
-      position: 'relative'
+      position: 'relative',
+      scrollMarginTop: 80
     }}>
-      {/* Speaker label */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         {isUser ? (
           <>
             <div style={{
@@ -421,14 +559,14 @@ function MessageBlock({ message, isSpeaking, activeSentence, onSpeak }) {
             <div className="icon-circle" style={{ width: 32, height: 32, borderRadius: 10 }}>
               <GraduationIcon />
             </div>
-            <span style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>מורה פרטי</span>
+            <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 700 }}>מורה פרטי</span>
             {hasVoice() && (
               <button onClick={onSpeak} style={{
                 marginInlineStart: 'auto',
-                background: isSpeaking ? 'rgba(30,58,95,0.20)' : 'transparent',
-                border: '1px solid ' + (isSpeaking ? 'var(--gold)' : 'var(--border)'),
+                background: isSpeaking ? 'rgba(30,58,95,0.15)' : 'transparent',
+                border: '1px solid ' + (isSpeaking ? 'var(--primary)' : 'var(--border)'),
                 borderRadius: 16, padding: '4px 10px', cursor: 'pointer',
-                color: isSpeaking ? 'var(--gold)' : 'var(--muted)',
+                color: isSpeaking ? 'var(--primary)' : 'var(--muted)',
                 fontSize: 12, display: 'flex', alignItems: 'center', gap: 4
               }} title={isSpeaking ? 'עצור' : 'הקרא בקול'}>
                 {isSpeaking ? <StopIconSm /> : <SpeakerSm />}
@@ -438,29 +576,32 @@ function MessageBlock({ message, isSpeaking, activeSentence, onSpeak }) {
         )}
       </div>
 
-      {/* Content */}
-      <div style={{
-        fontSize: 17, lineHeight: 1.85, color: 'var(--text)',
-        whiteSpace: 'pre-wrap',
-        paddingInlineStart: 42
-      }}>
-        {sentences ? (
-          sentences.map((s, i) => (
-            <span key={i} style={{
-              background: i === activeSentence ? 'linear-gradient(180deg, transparent 55%, #FFE57F 55%)' : 'transparent',
-              padding: i === activeSentence ? '2px 4px' : '0',
-              borderRadius: 4,
-              transition: 'background 0.25s ease',
-              fontWeight: i === activeSentence ? 600 : 'inherit'
-            }}>
-              {s}{i < sentences.length - 1 ? ' ' : ''}
-            </span>
-          ))
-        ) : message.content}
+      <div style={{ paddingInlineStart: 42, color: 'var(--text)' }}>
+        {isUser ? (
+          <div style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{message.content}</div>
+        ) : (
+          isSpeaking && activeSentence >= 0 ? (
+            <div style={{ fontSize: 17, lineHeight: 1.85, whiteSpace: 'pre-wrap' }}>
+              {splitSentences(message.content).map((s, i) => (
+                <span key={i} style={{
+                  background: i === activeSentence ? 'linear-gradient(180deg, transparent 55%, #FFE57F 55%)' : 'transparent',
+                  padding: i === activeSentence ? '2px 4px' : '0',
+                  borderRadius: 4,
+                  transition: 'background 0.25s ease',
+                  fontWeight: i === activeSentence ? 600 : 'inherit'
+                }}>
+                  {s}{i < splitSentences(message.content).length - 1 ? ' ' : ''}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div>{renderRich(message.content)}</div>
+          )
+        )}
       </div>
     </div>
   );
-}
+});
 
 function TypingBlock() {
   return (
