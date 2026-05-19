@@ -573,73 +573,85 @@ function renderInline(text) {
 const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, onSpeak }, ref) => {
   const isUser = message.role === 'user';
 
+  // WhatsApp-style bubble — user on the left (RTL "outgoing"), assistant on the right
+  const bubbleStyle = isUser
+    ? {
+        background: '#DCF8C6',                  // WhatsApp-style soft green (warm-friendly)
+        border: '1px solid #C6E9AE',
+        borderRadius: '18px 18px 4px 18px',     // tail bottom-left
+        color: '#1A2F1A',
+        boxShadow: '0 1px 2px rgba(80,55,25,0.10)'
+      }
+    : {
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '18px 18px 18px 4px',     // tail bottom-right
+        color: 'var(--text)',
+        boxShadow: 'var(--shadow-sm)'
+      };
+
   return (
     <div ref={ref} className="fade-up" style={{
-      padding: '20px 4px',
-      borderBottom: '1px solid rgba(225,180,140,0.15)',
-      position: 'relative',
+      display: 'flex',
+      justifyContent: isUser ? 'flex-start' : 'flex-end',
+      padding: '6px 4px',
       scrollMarginTop: 80
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        {isUser ? (
-          <>
-            <div style={{
-              width: 32, height: 32, borderRadius: 10,
-              background: 'var(--elevated)', border: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--text-soft)', fontWeight: 700, fontSize: 14
-            }}>א</div>
-            <span style={{ fontSize: 13, color: 'var(--text-soft)', fontWeight: 700 }}>אני</span>
-          </>
-        ) : (
-          <>
-            <div className="icon-circle" style={{ width: 32, height: 32, borderRadius: 10 }}>
-              <GraduationIcon />
-            </div>
-            <span style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 700 }}>מורה פרטי</span>
-            {hasVoice() && (
-              <button onClick={onSpeak} style={{
-                marginInlineStart: 'auto',
-                background: isSpeaking ? 'rgba(200,132,61,0.15)' : 'transparent',
-                border: '1px solid ' + (isSpeaking ? 'var(--primary)' : 'var(--border)'),
-                borderRadius: 16, padding: '4px 10px', cursor: 'pointer',
-                color: isSpeaking ? 'var(--primary)' : 'var(--muted)',
-                fontSize: 12, display: 'flex', alignItems: 'center', gap: 4
-              }} title={isSpeaking ? 'עצור' : 'הקרא בקול'}>
-                {isSpeaking ? <StopIconSm /> : <SpeakerSm />}
-              </button>
-            )}
-          </>
-        )}
-      </div>
+      <div style={{ maxWidth: '85%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Tiny role label above bubble */}
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: isUser ? '#5C8A5C' : 'var(--primary)',
+          paddingInline: 10, opacity: 0.85
+        }}>
+          {isUser ? 'אני' : 'מורה פרטי'}
+        </div>
 
-      <div style={{ paddingInlineStart: 42, color: 'var(--text)' }}>
-        {isUser ? (
-          <div style={{ fontSize: 19, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>
-        ) : (
-          isSpeaking && activeSentence >= 0 ? (
-            <div style={{ fontSize: 19, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
-              {splitSentences(message.content).map((s, i) => (
-                <span key={i} style={{
-                  background: i === activeSentence ? 'linear-gradient(180deg, transparent 55%, #FFE57F 55%)' : 'transparent',
-                  padding: i === activeSentence ? '2px 4px' : '0',
-                  borderRadius: 4,
-                  transition: 'background 0.25s ease',
-                  fontWeight: i === activeSentence ? 600 : 'inherit'
-                }}>
-                  {s}{i < splitSentences(message.content).length - 1 ? ' ' : ''}
-                </span>
-              ))}
-            </div>
+        <div style={{
+          ...bubbleStyle,
+          padding: '12px 16px',
+          position: 'relative'
+        }}>
+          {isUser ? (
+            <div style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>
           ) : (
-            <div>{(() => {
-              try { return renderRich(message.content); }
-              catch (e) {
-                return <div style={{ fontSize: 19, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>;
-              }
-            })()}</div>
-          )
-        )}
+            isSpeaking && activeSentence >= 0 ? (
+              <div style={{ fontSize: 18, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
+                {splitSentences(message.content).map((s, i) => (
+                  <span key={i} style={{
+                    background: i === activeSentence ? 'linear-gradient(180deg, transparent 55%, #FFE57F 55%)' : 'transparent',
+                    padding: i === activeSentence ? '2px 4px' : '0',
+                    borderRadius: 4,
+                    transition: 'background 0.25s ease',
+                    fontWeight: i === activeSentence ? 600 : 'inherit'
+                  }}>
+                    {s}{i < splitSentences(message.content).length - 1 ? ' ' : ''}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div>{(() => {
+                try { return renderRich(message.content); }
+                catch (e) {
+                  return <div style={{ fontSize: 18, lineHeight: 1.8, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{message.content}</div>;
+                }
+              })()}</div>
+            )
+          )}
+
+          {/* Speaker button only on assistant bubbles */}
+          {!isUser && hasVoice() && (
+            <button onClick={onSpeak} style={{
+              marginTop: 8,
+              background: isSpeaking ? 'rgba(200,132,61,0.15)' : 'transparent',
+              border: '1px solid ' + (isSpeaking ? 'var(--primary)' : 'var(--border)'),
+              borderRadius: 16, padding: '4px 10px', cursor: 'pointer',
+              color: isSpeaking ? 'var(--primary)' : 'var(--muted)',
+              fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4
+            }} title={isSpeaking ? 'עצור' : 'הקרא בקול'}>
+              {isSpeaking ? <StopIconSm /> : <SpeakerSm />}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -647,14 +659,15 @@ const MessageBlock = React.forwardRef(({ message, isSpeaking, activeSentence, on
 
 function TypingBlock() {
   return (
-    <div className="fade-up" style={{ padding: '18px 4px', borderBottom: '1px solid rgba(225,180,140,0.15)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div className="icon-circle" style={{ width: 32, height: 32, borderRadius: 10 }}>
-          <GraduationIcon />
-        </div>
-        <span style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>חושב...</span>
-      </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingInlineStart: 42 }}>
+    <div className="fade-up" style={{
+      display: 'flex', justifyContent: 'flex-end', padding: '6px 4px'
+    }}>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: '18px 18px 18px 4px', padding: '14px 18px',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex', gap: 6, alignItems: 'center'
+      }}>
         <div className="typing-dot" /><div className="typing-dot" /><div className="typing-dot" />
       </div>
     </div>
