@@ -121,10 +121,15 @@ app.post('/api/books/:id/chat', async (req, res) => {
     const systemPrompt = buildPrompt(profile, book);
 
     // Build Gemini history (exclude last user message)
-    const geminiHistory = history.slice(0, -1).map(m => ({
+    // Gemini requires the first history entry to be role 'user'
+    let geminiHistory = history.slice(0, -1).map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
+    // Trim leading 'model' entries — they break the API
+    while (geminiHistory.length > 0 && geminiHistory[0].role === 'model') {
+      geminiHistory.shift();
+    }
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-pro',
