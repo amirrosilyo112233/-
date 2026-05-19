@@ -92,16 +92,31 @@ export default function Chat({ book, onBack }) {
   }
 
   function toggleMic() {
-    if (listening) { stopListening(); setListening(false); }
-    else {
-      stop();
-      const ok = startListening(
-        (text) => setInput(text),
-        (final) => { setListening(false); if (final) { setInput(final); setTimeout(() => send(final), 200); } }
-      );
-      if (ok) setListening(true);
-      else alert('הדפדפן שלך לא תומך בקלט קולי. נסה Chrome.');
+    if (listening) {
+      stopListening();
+      setListening(false);
+      return;
     }
+    if (loading) return; // don't start mic during loading
+    stop();
+    const ok = startListening(
+      (text) => setInput(text),
+      (final) => {
+        setListening(false);
+        const clean = (final || '').trim();
+        // Only auto-send if there's meaningful text and we're not loading
+        if (clean.length >= 2 && !loading) {
+          setInput(clean);
+          setTimeout(() => {
+            if (!loading) send(clean);
+          }, 300);
+        } else if (clean.length > 0) {
+          setInput(clean); // keep it in input but don't auto-send
+        }
+      }
+    );
+    if (ok) setListening(true);
+    else alert('הדפדפן שלך לא תומך בקלט קולי. נסה Chrome.');
   }
 
   return (
