@@ -18,6 +18,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { extractContent } = require('./bookProcessor');
 const knowledgeMap = require('./cognition/knowledge_map');
 const lessonPlan = require('./cognition/lesson_plan');
+const { generate: llmGen } = require('./cognition/adapters/llm_adapter');
 
 // Lazy Gemini client for voice transcription (host code — not via llm_adapter)
 let _gemini = null;
@@ -318,8 +319,11 @@ async function formatBooksOverview() {
   });
 
   lines.push('---');
-  lines.push('כדי להחליף ספר פעיל: */ספר 2* (לפי המספר)');
-  lines.push('כדי לאנדקס ספר שעדיין לא מוכן: */אינדקס 1*');
+  lines.push('*פקודות:*');
+  lines.push('• */ספר 2* — להחליף ספר פעיל');
+  lines.push('• */אינדקס 1* — לאנדקס ספר שעדיין לא מוכן');
+  lines.push('• */יומן [טקסט]* — להוסיף ליומן השטח');
+  lines.push('• */קול* / */טקסט* — להפעיל/לבטל תשובות קוליות');
 
   return lines.join('\n');
 }
@@ -352,6 +356,28 @@ async function tryCommand(chatId, text, incomingMessageId) {
     const target = books[idx];
     await db.setActiveBookId(target.id);
     await sendReply(chatId, `✅ עברנו ל-*${target.title}*. כל שאלה שתשאל מכאן והלאה תופנה לספר הזה.`, incomingMessageId);
+    return true;
+  }
+
+  // Field log entry: starts with "יומן" or "/יומן" — save to journal + brief AI response
+  const journalMatch = t.match(/^(?:\/?יומן|\/?journal|\/?log)\s*:?\s*([\s\S]+)$/i);
+  if (journalMatch && journalMatch[1].trim().length > 5) {
+    const entry = journalMatch[1].trim();
+    const activeBook = await pickActiveBook();
+    const bookId = activeBook?.id || null;
+    const bookTitle = activeBook?.title || '';
+
+    try {
+      const prompt = `אמיר כתב ביומן השטח שלו: "${entry}"\n${bookTitle ? `הספר הפעיל: ${bookTitle}` : ''}\nתגיב בעברית בקצר (2-4 משפטים): שאל שאלת עומק אחת, חבר לחומר אם רלוונטי, הצע משהו קונקרטי לנסות מחר.`;
+      const aiText = await llmGen({ provider: 'gemini', model: 'gemini-3.5-flash', prompt });
+      await db.addFieldLog(bookId, entry, aiText);
+      await sendReply(chatId, `📔 *נשמר ביומן*\n\n${aiText}`, incomingMessageId);
+      eventLog.log({ type: 'field_log_added', agent: 'whatsapp', bookId, payload: { from: phone, entryLength: entry.length } });
+    } catch (e) {
+      console.error('[whatsapp] field log error:', e.message);
+      await db.addFieldLog(bookId, entry, '');
+      await sendReply(chatId, `📔 *נשמר ביומן* (שגיאה בתגובת AI)`, incomingMessageId);
+    }
     return true;
   }
 

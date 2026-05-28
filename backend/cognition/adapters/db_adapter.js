@@ -24,4 +24,7 @@ async function deleteChunks(bookId) { return db.deleteChunks(bookId); }
 async function getLearnerState(bookId) { return db.getLearnerState(bookId); }
 async function upsertLearnerState(bookId, data) { return db.upsertLearnerState(bookId, data); }
 
-module.exports = { insertEvent, getRecentEvents, addChunks, getChunks, deleteChunks, getLearnerState, upsertLearnerState };
+// ── Field Log (read-only access for context injection) ───────────────────────
+async function getRecentFieldLog(limit = 5) { return db.getRecentFieldLog(limit); }
+
+module.exports = { insertEvent, getRecentEvents, addChunks, getChunks, deleteChunks, getLearnerState, upsertLearnerState, getRecentFieldLog };

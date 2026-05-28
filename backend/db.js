@@ -270,7 +270,7 @@ const db = {
   async getRecentMessages(bookId, limit = 20) {
     if (useDb) {
       const rows = await q(
-        `SELECT role, content FROM messages WHERE book_id=$1 ORDER BY id DESC LIMIT $2`,
+        `SELECT role, content, created_at FROM messages WHERE book_id=$1 ORDER BY id DESC LIMIT $2`,
         [parseInt(bookId), limit]
       );
       return rows.reverse();
@@ -316,6 +316,16 @@ const db = {
     const logs = jLoad('field_log').reverse().slice(0, 30);
     const books = jLoad('books');
     return logs.map(l => ({ ...l, book_title: books.find(b => b.id === l.book_id)?.title || '' }));
+  },
+
+  async getRecentFieldLog(limit = 5) {
+    if (useDb) {
+      return await q(
+        `SELECT id, book_id, content, ai_response, created_at FROM field_log ORDER BY created_at DESC LIMIT $1`,
+        [limit]
+      );
+    }
+    return jLoad('field_log').reverse().slice(0, limit);
   },
 
   async addFieldLog(bookId, content, aiResponse) {

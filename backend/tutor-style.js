@@ -8,11 +8,28 @@
  *   When provided → used instead of full book content (much smaller, more focused).
  *   When empty   → falls back to full book content (pre-RAG behaviour).
  */
-function buildPrompt(profile, book, relevantChunks = [], learnerState = null) {
+function buildPrompt(profile, book, relevantChunks = [], learnerState = null, opts = {}) {
+  const { sessionContext = null, recentFieldEntries = [] } = opts;
   const topics = Array.isArray(book?.completed_topics) ? book.completed_topics : [];
   const name = profile?.name || 'אמיר';
   const profession = profile?.profession || 'מטפל וקואצ\'ר לנוער בסיכון, אבא';
   const bookTitle = book?.title || '';
+
+  // ── Session restart block (when user comes back after a long pause) ─────
+  let sessionBlock = '';
+  if (sessionContext?.isRestart) {
+    sessionBlock = `\n\n# ⏰ הוא חזר אחרי הפסקה\n\n${sessionContext.gapLabel}, האחרון שאמרת לו היה:\n"${sessionContext.lastTeacherSnippet}"\n\n**חובה לפתוח עם הכרה בהפסקה.** משפט אחד קצר: "${sessionContext.gapLabel} עצרנו על [נושא]. רוצה להמשיך משם או נושא חדש?" *לפני* שאתה עונה על השאלה הנוכחית. אל תתנהג כאילו אתה ממשיך באמצע משפט.\n`;
+  }
+
+  // ── Recent field log entries (background memory) ────────────────────────
+  let fieldBlock = '';
+  if (Array.isArray(recentFieldEntries) && recentFieldEntries.length > 0) {
+    const lines = recentFieldEntries.map((e, i) => {
+      const date = e.created_at ? new Date(e.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
+      return `${i + 1}. [${date}] ${(e.content || '').substring(0, 200)}`;
+    }).join('\n');
+    fieldBlock = `\n\n# 📔 רשימות שטח אחרונות שלו (מהיומן)\n\n${lines}\n\nאם רלוונטי לשאלה הנוכחית — חבר ("זוכר ש... כתבת?"). אם לא רלוונטי — אל תזכיר בכוח.\n`;
+  }
 
   // Format learner state for the prompt (only when there's meaningful state)
   let stateBlock = '';
@@ -103,7 +120,7 @@ function buildPrompt(profile, book, relevantChunks = [], learnerState = null) {
 6. **חיבור למה שלמדנו** — לא בועות מנותקות
 7. **בדיקה קצרה** — שאלה טבעית
 
-בחר מה רלוונטי, אל תעשה הכל בכל תשובה.${stateBlock}
+בחר מה רלוונטי, אל תעשה הכל בכל תשובה.${stateBlock}${sessionBlock}${fieldBlock}
 
 ---
 

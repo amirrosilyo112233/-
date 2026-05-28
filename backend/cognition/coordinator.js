@@ -20,6 +20,7 @@ const teacher = require('./teacher');
 const eventLog = require('./event_log');
 const knowledgeMap = require('./knowledge_map');
 const learnerState = require('./learner_state');
+const dbAdapter = require('./adapters/db_adapter');
 
 /**
  * @param {import('./schemas').ChatRequest} req
@@ -61,6 +62,49 @@ async function handleChatMessage(req) {
     stateSnapshot = await learnerState.get(bookId);
   } catch (e) {
     console.warn('[coordinator] learner_state get failed:', e.message);
+  }
+
+  // ── 0c. Session restart detection ────────────────────────────────────────
+  // If > 4 hours since the last assistant message → flag a "session restart".
+  // The teacher will open with "last time we were on X — continue or new?"
+  let sessionContext = null;
+  try {
+    const msgs = recentMessages || [];
+    // walk backward from last (current user msg) — find most recent assistant msg
+    let lastAssistantMsg = null;
+    for (let i = msgs.length - 2; i >= 0; i--) {
+      if (msgs[i].role === 'assistant') { lastAssistantMsg = msgs[i]; break; }
+    }
+    if (lastAssistantMsg?.created_at) {
+      const gapMs = Date.now() - new Date(lastAssistantMsg.created_at).getTime();
+      const FOUR_HOURS = 4 * 60 * 60 * 1000;
+      if (gapMs > FOUR_HOURS) {
+        const hours = Math.round(gapMs / (60 * 60 * 1000));
+        sessionContext = {
+          isRestart: true,
+          hoursSinceLast: hours,
+          gapLabel: hours < 24 ? `לפני ${hours} שעות` : (hours < 48 ? 'אתמול' : `לפני ${Math.round(hours/24)} ימים`),
+          lastTeacherSnippet: (lastAssistantMsg.content || '').substring(0, 400)
+        };
+        eventLog.log({
+          type: 'session_restart',
+          bookId,
+          agent: 'coordinator',
+          payload: { hoursSinceLast: hours }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[coordinator] session restart detection failed:', e.message);
+  }
+
+  // ── 0d. Recent field log entries (background context) ───────────────────
+  let recentFieldEntries = [];
+  try {
+    const allLogs = await dbAdapter.getRecentFieldLog ? await dbAdapter.getRecentFieldLog(5) : [];
+    recentFieldEntries = allLogs.filter(l => !l.book_id || l.book_id === parseInt(bookId)).slice(0, 3);
+  } catch (e) {
+    console.warn('[coordinator] field log fetch failed:', e.message);
   }
 
   // ── 1. Anti-Pseudo: classify the user's message ───────────────────────────
@@ -132,7 +176,9 @@ async function handleChatMessage(req) {
       instruction: decision.instruction,
       pseudo,
       relevantChunks,
-      learnerState: stateSnapshot   // current understanding profile for this book
+      learnerState: stateSnapshot,
+      sessionContext,       // {isRestart, hoursSinceLast, gapLabel, lastTeacherSnippet}
+      recentFieldEntries    // last 3 field log entries for context awareness
     });
     replyText = result.replyText;
 

@@ -59,9 +59,9 @@ function pickModel({ pseudo, userMessage, recentMessages }) {
  * @param {string[]} [args.relevantChunks]  RAG: top-K chunks from knowledge_map
  * @returns {Promise<{ replyText: string, meta: object }>}
  */
-async function respond({ profile, book, recentMessages, userMessage, strategy, instruction, pseudo, model, relevantChunks, learnerState }) {
+async function respond({ profile, book, recentMessages, userMessage, strategy, instruction, pseudo, model, relevantChunks, learnerState, sessionContext, recentFieldEntries }) {
   // Build base prompt. If RAG chunks provided, pass them; otherwise fall back to full content.
-  const basePrompt = buildPrompt(profile, book, relevantChunks || [], learnerState);
+  const basePrompt = buildPrompt(profile, book, relevantChunks || [], learnerState, { sessionContext, recentFieldEntries });
   const choice = model
     ? { model, reason: 'explicit_override' }
     : pickModel({ pseudo, userMessage, recentMessages });
