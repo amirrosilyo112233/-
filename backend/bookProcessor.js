@@ -34,10 +34,17 @@ async function extractContent(buffer, filename, index = 1, total = 1) {
     if (ext === '.pdf') {
       const pdfParse = require('pdf-parse');
       const data = await pdfParse(buffer);
-      if (data.text && data.text.trim().length > 50) {
+      // Count REAL content chars (letters/digits), not whitespace.
+      // A scanned PDF often returns kilobytes of pure whitespace which fooled the old check.
+      const real = (data.text || '').replace(/\s+/g, '');
+      if (real.length > 200) {
         return label + data.text.substring(0, 40000);
       }
-      // Scanned PDF → Gemini Vision
+      // Scanned PDF (or empty text layer) → Vision fallback
+      // Buffer size guard: Gemini's inline data limit is ~20MB.
+      if (buffer.length > 18 * 1024 * 1024) {
+        return label + `(הקובץ סרוק (${(buffer.length / 1024 / 1024).toFixed(1)}MB) וגדול מדי ל-Vision. הרץ OCR קודם — למשל https://www.ilovepdf.com/ocr-pdf — והעלה את הקובץ המתורגם בחזרה.)`;
+      }
       return label + await visionExtract(buffer, 'application/pdf',
         'תאר בפירוט מלא את כל התוכן של הקובץ הזה — כל הטקסט, הכותרות, הדיאגרמות, הטבלאות, וכל מידע חזותי חשוב. שמור על הסדר המקורי.');
     }

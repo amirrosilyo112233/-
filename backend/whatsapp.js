@@ -473,10 +473,22 @@ async function handleIncomingWebhook(payload) {
       const content = await extractContent(buf, fileName);
 
       const title = fileName.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').trim() || 'ספר חדש';
+
+      // Content quality check — fail fast if extraction returned almost nothing
+      const realContent = (content || '').replace(/\s+/g, '');
+      if (realContent.length < 500) {
+        await sendReply(chatId,
+          `⚠️ *${title}* — חילצתי רק ${realContent.length} תווים אמיתיים. זה נראה כמו PDF סרוק (תמונות, לא טקסט).\n\nפתרון: עבור ל-https://www.ilovepdf.com/ocr-pdf, העלה את הקובץ, הורד את הגרסה עם OCR, והעלה אותה לכאן.\n\nאני לא יוצר ספר ריק.`,
+          incomingMessageId
+        );
+        eventLog.log({ type: 'whatsapp_upload_low_content', agent: 'whatsapp', payload: { from: phone, fileName, realChars: realContent.length } });
+        return { status: 'skipped', reason: 'low content quality' };
+      }
+
       const book = await db.addBook({ title, language: 'en', content });
 
       await sendReply(chatId,
-        `📚 *${book.title}* עלה בהצלחה!\n\nמסדר עכשיו אינדקס...`,
+        `📚 *${book.title}* עלה בהצלחה (${(realContent.length / 1000).toFixed(0)}K תווים אמיתיים)!\n\nמסדר עכשיו אינדקס...`,
         incomingMessageId
       );
       // Background RAG ingestion → roadmap → notify on completion
