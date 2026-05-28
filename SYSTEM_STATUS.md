@@ -1,7 +1,7 @@
 # SYSTEM STATUS MAP — `my-tutor`
 
 > **Single source of truth for implementation progress.**
-> Updated at: end of Phase 1.
+> Updated at: end of Phase 2 (anti_pseudo + routing live).
 > A module is `WORKING` only if: code exists, imports resolve, runtime executes, and the flow has been exercised end-to-end.
 
 **Status labels:** `NOT_STARTED` · `PLANNED` · `STUB` · `PARTIAL` · `WORKING` · `BLOCKED` · `NEEDS_REFACTOR` · `TESTED`
@@ -31,14 +31,15 @@
 | `README.md` (capsule contract) | `WORKING` | 1 | — | n/a (doc) | — | — |
 | `schemas.js` (JSDoc typedefs) | `WORKING` | 1 | — | n/a (doc) | exports `{}` intentionally | extend when agents land |
 | `adapters/db_adapter.js` | `WORKING` | 1 | `../../db` | yes | exposes `insertEvent`, `getRecentEvents` only | extend for learner_state in Phase 2 |
-| `adapters/llm_adapter.js` | `PARTIAL` | 1 | `@google/generative-ai` | yes (Gemini only) | OpenAI provider throws | add OpenAI provider in Phase 2 |
-| `event_log.js` | `WORKING` | 1 | db_adapter | yes | write-only; no querying yet | add `/api/events` debug endpoint if needed |
-| `teacher.js` | `WORKING` | 1 | llm_adapter, ../tutor-style | yes | uses legacy `buildPrompt` for now; ignores any future RoutingDecision | accept Strategy + template in Phase 2 |
-| `coordinator.js` | `WORKING` | 1 | teacher, event_log | yes | pass-through only; Phase 2 hook points are commented placeholders | wire in anti_pseudo + routing in Phase 2 |
-| `anti_pseudo.js` | `NOT_STARTED` | 2 | llm_adapter (OpenAI), event_log | no | — | create with GPT-4o-mini structured output |
-| `routing.js` | `NOT_STARTED` | 2 | (deterministic) | no | — | rule-based decision tree |
-| `learner_state.js` | `NOT_STARTED` | 2 | db_adapter | no | needs `learner_state` table | create table + module |
-| `knowledge_map.js` | `STUB` (mental model only) | 2 | db_adapter | no | will return raw `book.content` initially | implement chunk retrieval |
+| `adapters/llm_adapter.js` | `WORKING` | 2 | `@google/generative-ai`, `openai` | yes | exposes `chat`, `generate` (Gemini) + `chat`, `chatJson` (OpenAI w/ JSON mode) | — |
+| `event_log.js` | `WORKING` | 1 | db_adapter | yes | write-only; no querying yet | `/api/events` exists as read path |
+| `teacher.js` | `WORKING` | 2 | llm_adapter, ../tutor-style | yes | now accepts optional `{strategy, instruction}` and prepends a directive | — |
+| `coordinator.js` | `WORKING` | 2 | anti_pseudo, routing, teacher, event_log | yes | full Phase 2 flow active: anti_pseudo → routing → teacher | — |
+| `anti_pseudo.js` | `WORKING` | 2 | llm_adapter (OpenAI), prompts/anti_pseudo.txt | yes | GPT-4o-mini w/ JSON mode; deterministic short-circuits for empty assent; safe fallback on failure | exercise live & tune prompt from real data |
+| `routing.js` | `WORKING` | 2 | (deterministic, no deps) | yes | 6 rules, all unit-tested; exposes STRATEGIES + INSTRUCTIONS | — |
+| `prompts/anti_pseudo.txt` | `WORKING` | 2 | — | n/a (doc) | Hebrew prompt; 4 signals + 4 depth levels | iterate based on production telemetry |
+| `learner_state.js` | `NOT_STARTED` | 3 | db_adapter | no | needs `learner_state` table | create table + module |
+| `knowledge_map.js` | `STUB` (mental model only) | 3 | db_adapter | no | will return raw `book.content` initially | implement chunk retrieval |
 | `ingestion.js` | `NOT_STARTED` | 3 | llm_adapter (Gemini Pro) | no | needs `knowledge_units` table | wire into `/api/books/upload` post-save |
 
 ### DB schema
@@ -55,13 +56,13 @@
 | Provider | Status | Phase | Used by | Notes |
 |---|---|---|---|---|
 | Gemini 2.5 Flash | `WORKING` | 1 | Teacher | live chat replies |
-| Gemini 2.5 Pro | `WORKING` | host | Vision (upload), chapter summary, chapter QA, field log | unchanged by Phase 1 |
-| OpenAI GPT-4o-mini | `NOT_STARTED` | 2 | Anti-Pseudo | needs `OPENAI_API_KEY` env on Render |
+| Gemini 2.5 Pro | `WORKING` | host | Vision (upload), chapter summary, chapter QA, field log | unchanged |
+| OpenAI GPT-4o-mini | `WORKING` | 2 | Anti-Pseudo | `OPENAI_API_KEY` set on Render; JSON mode used |
 | OpenAI text-embedding-3-large | `NOT_STARTED` | 3 | Knowledge Map | only when embeddings retrieval lands |
 
 ---
 
-## 2 · Current Runtime Flow Map (Phase 1, actual)
+## 2 · Current Runtime Flow Map (Phase 2, actual)
 
 ```
 client (POST /api/books/:id/chat)
@@ -74,25 +75,40 @@ cognition/coordinator.handleChatMessage
    │   event: chat_received
    │
    ▼
+cognition/anti_pseudo.evaluate
+   │   • deterministic short-circuit for empty-assent / first-turn
+   │   • else: llm_adapter.chatJson → OpenAI gpt-4o-mini (JSON mode)
+   │   event: pseudo_evaluated { signal, depth, reason }
+   │
+   ▼
+cognition/routing.decide  (pure, no LLM)
+   │   • rule-based mapping: signal+depth → strategy + Hebrew directive
+   │   event: routing_decided { strategy, ruleId }
+   │
+   ▼
 cognition/teacher.respond
-   │   event: teacher_invoked
+   │   • prepends strategic directive to systemInstruction
+   │   event: teacher_invoked { model, strategy }
    │
    ▼
 cognition/adapters/llm_adapter.chat  ───►  Gemini 2.5 Flash
    │                                        │
    │◄───────────────────────────────────────┘ reply text
-   │   event: teacher_replied (with latencyMs)
+   │   event: teacher_replied { replyLength, latencyMs, strategy }
    │
    ▼  return { reply }
 coordinator
-   │   event: chat_completed (with total latencyMs)
+   │   event: chat_completed { latencyMs, strategy, signal }
    │
    ▼
-server.js  ─ db.addMessage(assistant), db.updateBook, emoji hooks (insights/scripts)
+server.js  ─ db.addMessage(assistant), db.updateBook, emoji hooks
    │
    ▼
 HTTP 200  { message: reply }
 ```
+
+**Two LLM calls per turn:** GPT-4o-mini (~500-1500ms classification) + Gemini Flash (~8-12s reply).
+**Coordinator overhead:** still < 30ms.
 
 All other endpoints (`/upload`, `/tts`, `/chapters/complete`, `/field-log`, `/insights`, `/scripts`, `/health`) bypass the cognition capsule entirely and continue to use Gemini directly.
 
@@ -102,14 +118,14 @@ All other endpoints (`/upload`, `/tts`, `/chapters/complete`, `/field-log`, `/in
 
 | Agent | File | Status | Calls LLM? | Plug-in point |
 |---|---|---|---|---|
-| Runtime Coordinator | `cognition/coordinator.js` | `WORKING` (pass-through) | no | `server.js` chat route |
-| Teacher | `cognition/teacher.js` | `WORKING` | yes — Gemini Flash | called by coordinator |
+| Runtime Coordinator | `cognition/coordinator.js` | `WORKING` (Phase 2 flow) | no | `server.js` chat route |
+| Teacher | `cognition/teacher.js` | `WORKING` (strategy-aware) | yes — Gemini Flash | called by coordinator |
 | Event Log | `cognition/event_log.js` | `WORKING` | no | called by all agents |
-| Anti-Pseudo | — | `NOT_STARTED` | will: GPT-4o-mini | between chat_received and teacher_invoked |
-| Cognitive Routing | — | `NOT_STARTED` | no | after Anti-Pseudo |
-| Learner-State | — | `NOT_STARTED` | no | read by routing; written by anti_pseudo |
-| Knowledge Map | — | `NOT_STARTED` | no (Phase 2); embeddings later | queried by coordinator |
-| Ingestion | — | `NOT_STARTED` | will: Gemini Pro | after `/api/books/upload` |
+| Anti-Pseudo | `cognition/anti_pseudo.js` | `WORKING` | yes — GPT-4o-mini (JSON) | between chat_received and routing |
+| Cognitive Routing | `cognition/routing.js` | `WORKING` | no | after Anti-Pseudo |
+| Learner-State | — | `NOT_STARTED` (Phase 3) | no | read by routing; written by anti_pseudo |
+| Knowledge Map | — | `NOT_STARTED` (Phase 3) | no (deterministic first; embeddings later) | queried by coordinator |
+| Ingestion | — | `NOT_STARTED` (Phase 3) | will: Gemini Pro | after `/api/books/upload` |
 
 ---
 
@@ -121,7 +137,9 @@ All other endpoints (`/upload`, `/tts`, `/chapters/complete`, `/field-log`, `/in
 | `Event` | `cognition/schemas.js` | `event_log.log`, `db.addEvent` |
 | `EventType` enum | `cognition/schemas.js` | currently emitted: `chat_received`, `teacher_invoked`, `teacher_replied`, `teacher_failed`, `chat_completed` |
 | `StoredMessage`, `Book`, `Profile` | `cognition/schemas.js` | `server.js` → coordinator → teacher |
-| `AntiPseudoResult`, `RoutingDecision`, `LearnerState`, `KnowledgeMapResult` | `cognition/schemas.js` | **declared, not yet honored** (no agent emits them) |
+| `AntiPseudoResult` | `cognition/schemas.js` | `anti_pseudo.evaluate` ✅ |
+| `RoutingDecision` (Strategy + instruction) | `cognition/schemas.js` + `routing.js` | `routing.decide` ✅, `teacher.respond` consumes ✅ |
+| `LearnerState`, `KnowledgeMapResult` | `cognition/schemas.js` | **declared, not yet honored** (Phase 3) |
 
 ---
 
@@ -132,10 +150,12 @@ Each chat turn emits these events to the `events` table:
 | Order | Event type | Emitted by | Carries |
 |---|---|---|---|
 | 1 | `chat_received` | coordinator | `messageLength`, `historyCount` |
-| 2 | `teacher_invoked` | coordinator | `model` |
-| 3a | `teacher_replied` | coordinator | `replyLength`, `model`, `historyLength`, `latencyMs` |
-| 3b | `teacher_failed` (alt) | coordinator | `error`, `latencyMs` |
-| 4 | `chat_completed` | coordinator | total `latencyMs` |
+| 2 | `pseudo_evaluated` | anti_pseudo | `signal`, `depth`, `reason`, `model`, `deterministic`, `fallback`, `error`, `latencyMs` |
+| 3 | `routing_decided` | routing | `strategy`, `ruleId`, `signal`, `depth` |
+| 4 | `teacher_invoked` | coordinator | `model`, `strategy` |
+| 5a | `teacher_replied` | coordinator | `replyLength`, `model`, `historyLength`, `strategy`, `latencyMs` |
+| 5b | `teacher_failed` (alt) | coordinator | `error`, `strategy`, `latencyMs` |
+| 6 | `chat_completed` | coordinator | `strategy`, `signal`, total `latencyMs` |
 
 **Read path (telemetry):** `GET /api/events?key=$DEBUG_KEY&limit=100` returns the most recent events as JSON.
 Requires `DEBUG_KEY` env var on the server. Returns 503 if not configured, 401 if mismatch.
@@ -167,8 +187,11 @@ my-tutor/
 │       ├── event_log.js                (WORKING — write-only)
 │       ├── adapters/
 │       │   ├── db_adapter.js           (WORKING — events only)
-│       │   └── llm_adapter.js          (PARTIAL — Gemini only)
-│       └── prompts/                    (empty — Phase 2)
+│       │   └── llm_adapter.js          (WORKING — Gemini + OpenAI)
+│       ├── anti_pseudo.js              (WORKING — GPT-4o-mini)
+│       ├── routing.js                  (WORKING — deterministic)
+│       └── prompts/
+│           └── anti_pseudo.txt         (Phase 2 prompt)
 └── frontend/                           (unchanged in Phase 1)
     └── src/...
 ```
@@ -215,19 +238,23 @@ Boundary invariants enforced by convention:
 - [ ] Verified end-to-end against live Render — **PENDING USER TEST**
 - [x] `/api/events` telemetry endpoint (auth-gated by `DEBUG_KEY`)
 
-### Phase 2 — Cognition activation (NOT_STARTED)
+### Phase 2 — Cognition activation  ✅ COMPLETE
 
-- [ ] Add `OPENAI_API_KEY` env on Render
-- [ ] Extend `llm_adapter` with OpenAI provider
-- [ ] Implement `anti_pseudo.js` (GPT-4o-mini, structured JSON)
-- [ ] Implement `routing.js` (rule-based decision tree)
-- [ ] Add `learner_state` table + `learner_state.js`
-- [ ] Wire all four into `coordinator.handleChatMessage`
-- [ ] Add prompt templates per Strategy in `cognition/prompts/`
-- [ ] Teacher accepts `RoutingDecision`
+- [x] Add `OPENAI_API_KEY` env on Render
+- [x] Extend `llm_adapter` with OpenAI provider (chat + chatJson with JSON mode)
+- [x] Implement `anti_pseudo.js` (GPT-4o-mini, structured JSON, deterministic short-circuits, safe fallback)
+- [x] Implement `routing.js` (rule-based decision tree, 6 rules)
+- [x] Add prompt template for Anti-Pseudo at `cognition/prompts/anti_pseudo.txt`
+- [x] Teacher accepts `{strategy, instruction}` and prepends a directive
+- [x] Wire all three into `coordinator.handleChatMessage`
+- [x] New events emitted: `pseudo_evaluated`, `routing_decided`
+- [ ] **Verified live in production** — pending user test
+- [ ] Per-strategy prompt templates (currently single directive string per strategy in routing.js — fine for MVP)
+- [ ] `learner_state` table + module — deferred to Phase 3
 
-### Phase 3 — Knowledge layer (NOT_STARTED)
+### Phase 3 — Knowledge + Memory layer (NOT_STARTED)
 
+- [ ] Add `learner_state` table + `learner_state.js` (tracks understandsWell/shaky/misconceptions across sessions)
 - [ ] Add `knowledge_units` table
 - [ ] Implement `ingestion.js` (Gemini Pro, runs once per upload)
 - [ ] Implement `knowledge_map.js` (chunk retrieval; later: embeddings)

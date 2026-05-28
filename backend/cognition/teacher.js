@@ -1,13 +1,12 @@
 /**
  * Teacher Agent — produces the user-facing reply.
  *
- * Phase 1: identical behavior to the previous inline Gemini call.
- *          System prompt: tutor-style.buildPrompt(profile, book).
- *          History: same trim-leading-'model' workaround.
- *          Model: gemini-2.5-flash.
+ * Phase 2: accepts optional { strategy, instruction } from the coordinator.
+ *          When present, prepends a strategic directive to the system prompt
+ *          that overrides the teacher's default tendency.
+ *          When absent (legacy/test calls), behaves exactly like Phase 1.
  *
- * Phase 2: will accept a RoutingDecision (strategy + instruction) from the coordinator
- *          and use strategy-specific prompt templates from ./prompts/.
+ * Model: gemini-2.5-flash (chat persona, speed).
  */
 
 const { buildPrompt } = require('../tutor-style');
@@ -23,18 +22,26 @@ const PROVIDER = 'gemini';
  * @param {import('./schemas').StoredMessage[]} args.recentMessages
  *        Includes the just-saved user message as the LAST entry.
  * @param {string} args.userMessage
- * @returns {Promise<{ replyText: string, meta: { model: string, historyLength: number } }>}
+ * @param {string} [args.strategy]     One of routing.STRATEGIES
+ * @param {string} [args.instruction]  Short directive (Hebrew) from routing agent
+ * @returns {Promise<{ replyText: string, meta: { model: string, historyLength: number, strategy: string|null } }>}
  */
-async function respond({ profile, book, recentMessages, userMessage }) {
-  const systemInstruction = buildPrompt(profile, book);
+async function respond({ profile, book, recentMessages, userMessage, strategy, instruction }) {
+  const basePrompt = buildPrompt(profile, book);
+
+  // ── Strategic directive ─────────────────────────────────────────────────────
+  // When the coordinator provides a strategy, the instruction is prepended
+  // *above* the existing buildPrompt. The directive is short and surgical;
+  // it overrides the teacher's default verbose tendency for this turn only.
+  const systemInstruction = instruction
+    ? `## הוראת אסטרטגיה לתשובה הנוכחית (חובה לציית — גובר על כל ברירת מחדל אחרת)\n${instruction}\n\n---\n\n${basePrompt}`
+    : basePrompt;
 
   // Build provider-shaped history (exclude the last user message — sent separately).
   let history = recentMessages.slice(0, -1).map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }]
   }));
-
-  // Gemini requires the first history entry to be role 'user'.
   while (history.length > 0 && history[0].role === 'model') {
     history.shift();
   }
@@ -49,7 +56,7 @@ async function respond({ profile, book, recentMessages, userMessage }) {
 
   return {
     replyText,
-    meta: { model: MODEL, historyLength: history.length }
+    meta: { model: MODEL, historyLength: history.length, strategy: strategy || null }
   };
 }
 

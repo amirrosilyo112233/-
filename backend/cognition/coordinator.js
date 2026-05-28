@@ -1,28 +1,25 @@
 /**
  * Runtime Coordinator Agent — orchestration only.
  *
- * Responsibilities:
- *  - Receive a ChatRequest from the host
- *  - Call agents in the correct order
- *  - Emit events at each step
- *  - Return a ChatResponse
+ * Phase 2 flow:
+ *   chat_received
+ *   → anti_pseudo.evaluate           [pseudo_evaluated]
+ *   → routing.decide                 [routing_decided]
+ *   → teacher.respond(strategy)      [teacher_invoked → teacher_replied]
+ *   → chat_completed
  *
- * NOT allowed:
- *  - calling Gemini directly (use teacher / llm_adapter)
- *  - holding state across requests
- *  - making content decisions
- *
- * Phase 1: pass-through. Only Teacher is invoked. Anti-Pseudo, Routing,
- *          LearnerState, KnowledgeMap are NOT_STARTED — to be inserted
- *          between "chat_received" and the teacher call in Phase 2 without
- *          changing this file's external contract.
+ * Failure isolation:
+ *   - anti_pseudo errors fall back to { partial, depth=1 } (handled inside anti_pseudo)
+ *   - routing is deterministic, cannot fail
+ *   - teacher errors propagate (returned as HTTP 500 by host)
  */
 
+const antiPseudo = require('./anti_pseudo');
+const routing = require('./routing');
 const teacher = require('./teacher');
 const eventLog = require('./event_log');
 
 /**
- * Handle a single chat turn.
  * @param {import('./schemas').ChatRequest} req
  * @returns {Promise<import('./schemas').ChatResponse>}
  */
@@ -37,26 +34,78 @@ async function handleChatMessage(req) {
     payload: { messageLength: (userMessage || '').length, historyCount: (recentMessages || []).length }
   });
 
-  // ── Phase 2 hook points (currently no-ops) ────────────────────────────────
-  //   const ks      = await knowledgeMap.query({ bookId, focus: userMessage });
-  //   const state   = await learnerState.get({ bookId });
-  //   const pseudo  = await antiPseudo.evaluate({ userMessage, lastTeacher, currentTopic });
-  //   const route   = routing.decide({ pseudo, state, ks });
-  // ──────────────────────────────────────────────────────────────────────────
+  // ── 1. Anti-Pseudo: classify the user's message ───────────────────────────
+  // Find the most recent assistant message in history (the prior teacher turn).
+  // recentMessages includes the just-saved user message as the LAST entry,
+  // so we walk backward from index length-2 looking for role === 'assistant'.
+  let lastTeacherMessage = null;
+  for (let i = (recentMessages || []).length - 2; i >= 0; i--) {
+    if (recentMessages[i].role === 'assistant') {
+      lastTeacherMessage = recentMessages[i].content;
+      break;
+    }
+  }
+
+  const pseudo = await antiPseudo.evaluate({
+    userMessage,
+    lastTeacherMessage,
+    currentTopic: book?.current_chapter || null
+  });
+
+  eventLog.log({
+    type: 'pseudo_evaluated',
+    bookId,
+    agent: 'anti_pseudo',
+    payload: {
+      signal: pseudo.signal,
+      depth: pseudo.depth,
+      reason: pseudo.reason,
+      model: antiPseudo.MODEL,
+      deterministic: pseudo.deterministic || false,
+      fallback: pseudo.fallback || false,
+      error: pseudo.error || null
+    },
+    latencyMs: pseudo.durationMs
+  });
+
+  // ── 2. Routing: deterministic strategy decision ───────────────────────────
+  const decision = routing.decide({ pseudo });
+
+  eventLog.log({
+    type: 'routing_decided',
+    bookId,
+    agent: 'routing',
+    payload: { strategy: decision.strategy, ruleId: decision.ruleId, signal: pseudo.signal, depth: pseudo.depth }
+  });
+
+  // ── 3. Teacher: generate the reply, guided by the strategy ────────────────
+  const teacherStart = Date.now();
+  eventLog.log({
+    type: 'teacher_invoked',
+    bookId,
+    agent: 'teacher',
+    payload: { model: teacher.MODEL, strategy: decision.strategy }
+  });
 
   let replyText;
-  const teacherStart = Date.now();
-  eventLog.log({ type: 'teacher_invoked', bookId, agent: 'teacher', payload: { model: teacher.MODEL } });
-
   try {
-    const result = await teacher.respond({ profile, book, recentMessages, userMessage });
+    const result = await teacher.respond({
+      profile, book, recentMessages, userMessage,
+      strategy: decision.strategy,
+      instruction: decision.instruction
+    });
     replyText = result.replyText;
 
     eventLog.log({
       type: 'teacher_replied',
       bookId,
       agent: 'teacher',
-      payload: { replyLength: replyText.length, model: result.meta.model, historyLength: result.meta.historyLength },
+      payload: {
+        replyLength: replyText.length,
+        model: result.meta.model,
+        historyLength: result.meta.historyLength,
+        strategy: result.meta.strategy
+      },
       latencyMs: Date.now() - teacherStart
     });
   } catch (err) {
@@ -64,17 +113,18 @@ async function handleChatMessage(req) {
       type: 'teacher_failed',
       bookId,
       agent: 'teacher',
-      payload: { error: err.message },
+      payload: { error: err.message, strategy: decision.strategy },
       latencyMs: Date.now() - teacherStart
     });
-    throw err; // propagate to host so HTTP error contract stays intact
+    throw err;
   }
 
   eventLog.log({
     type: 'chat_completed',
     bookId,
     agent: 'coordinator',
-    latencyMs: Date.now() - t0
+    latencyMs: Date.now() - t0,
+    payload: { strategy: decision.strategy, signal: pseudo.signal }
   });
 
   return { reply: replyText };
