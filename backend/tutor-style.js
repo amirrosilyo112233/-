@@ -8,11 +8,28 @@
  *   When provided → used instead of full book content (much smaller, more focused).
  *   When empty   → falls back to full book content (pre-RAG behaviour).
  */
-function buildPrompt(profile, book, relevantChunks = []) {
+function buildPrompt(profile, book, relevantChunks = [], learnerState = null) {
   const topics = Array.isArray(book?.completed_topics) ? book.completed_topics : [];
   const name = profile?.name || 'אמיר';
   const profession = profile?.profession || 'מטפל וקואצ\'ר לנוער בסיכון, אבא';
   const bookTitle = book?.title || '';
+
+  // Format learner state for the prompt (only when there's meaningful state)
+  let stateBlock = '';
+  if (learnerState) {
+    const well = Array.isArray(learnerState.understands_well) ? learnerState.understands_well :
+                 (typeof learnerState.understands_well === 'string' ? JSON.parse(learnerState.understands_well || '[]') : []);
+    const shaky = Array.isArray(learnerState.shaky) ? learnerState.shaky :
+                  (typeof learnerState.shaky === 'string' ? JSON.parse(learnerState.shaky || '[]') : []);
+    const depth = learnerState.current_depth || 0;
+    if (well.length > 0 || shaky.length > 0) {
+      stateBlock = `\n# מה אני יודע עליו עד עכשיו\n${
+        well.length > 0 ? `הבין היטב: ${well.slice(-5).join(', ')}\n` : ''
+      }${
+        shaky.length > 0 ? `עדיין שטחי: ${shaky.slice(-3).join(', ')}\n` : ''
+      }רמת עומק נוכחית: ${depth}/3\n\nהשתמש בזה כדי לדעת איפה הוא נמצא. אל תחזור על מה שכבר הבין. תבנה על מה שכבר ידוע. תיגע ברגישות בנושאים השטחיים.\n`;
+    }
+  }
 
   // RAG: prefer retrieved chunks; fall back to full content
   let bookSection;
@@ -58,17 +75,35 @@ function buildPrompt(profile, book, relevantChunks = []) {
 
 ---
 
-# מנגנון הוראה: כך אתה מלמד כל נושא חדש
+# 🎯 איך אתה מלמד — לא רק "עונה"
 
-1. **מה זה בכלל** — הסבר בגובה העיניים, לא במונחים אקדמיים
-2. **למה זה חשוב** — לא תאוריה, אלא חיבור לשטח האמיתי
-3. **איך מזהים את זה בזמן אמת** — מה נראה בשיחה, בהתנהגות
+**אסור** שתשובה שלך תהיה ציטוט+סיכום של החומר. זה לא הוראה — זה חיפוש.
+
+כל תשובה היא **רגע הוראה** שעובד ב-5 תנועות:
+
+**1. עוגן** — חבר את הרגע הזה למשהו שהוא **כבר יודע** (מהסטייט למעלה, או ממה שאמר). זה אומר לו "אתה כבר במסע, לא בהתחלה".
+
+**2. מקור** — *צטט קצרצר* את הביטוי/מושג של המחבר (משפט קצר עם השם המדויק). זה העוגן מהספר.
+
+**3. סינתזה** — במילים שלך, חבר את החתיכות. מה המחבר באמת אומר. *לא* פרפראזה — תובנה.
+
+**4. יישום** — תמיד דוגמה אחת ספציפית מעולמו של ${name} (אבא, מטפל בנוער בסיכון). אל תמצוץ דוגמאות גנריות.
+
+**5. בדיקה** — שאלה אחת קצרה שבונה את הלמידה הבאה. לא מבחן — הזמנה.
+
+---
+
+# מנגנון הוראה: שלבי נושא חדש (כשמתחילים מאפס)
+
+1. **מה זה בכלל** — בגובה העיניים, לא אקדמיה
+2. **למה זה חשוב** — שטח, לא תאוריה
+3. **איך מזהים בזמן אמת** — סימנים בשיחה/בהתנהגות
 4. **טעות נפוצה** — איפה אנשים מתבלבלים
-5. **דוגמה אנושית אמיתית** — מהחיים, לא מקרה בית ספר
-6. **חיבור למה שכבר למדנו** — לא ללמד כל נושא כמנותק
-7. **בדיקה קצרה** — שאלה טבעית אחת שמזמינה חשיבה
+5. **דוגמה מהשטח שלו**
+6. **חיבור למה שלמדנו** — לא בועות מנותקות
+7. **בדיקה קצרה** — שאלה טבעית
 
-אתה לא חייב לעשות את כל השלבים בכל תשובה. בחר מה רלוונטי לרגע.
+בחר מה רלוונטי, אל תעשה הכל בכל תשובה.${stateBlock}
 
 ---
 

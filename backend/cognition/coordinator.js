@@ -36,7 +36,7 @@ async function handleChatMessage(req) {
     payload: { messageLength: (userMessage || '').length, historyCount: (recentMessages || []).length }
   });
 
-  // ── 0. RAG: retrieve relevant book chunks if indexed ─────────────────────
+  // ── 0a. RAG: retrieve relevant book chunks if indexed ────────────────────
   let relevantChunks = [];
   if (book?.indexed_at) {
     try {
@@ -53,6 +53,14 @@ async function handleChatMessage(req) {
     } catch (e) {
       console.warn('[coordinator] RAG query failed, falling back to full content:', e.message);
     }
+  }
+
+  // ── 0b. Learner-State: load current understanding profile ───────────────
+  let stateSnapshot = null;
+  try {
+    stateSnapshot = await learnerState.get(bookId);
+  } catch (e) {
+    console.warn('[coordinator] learner_state get failed:', e.message);
   }
 
   // ── 1. Anti-Pseudo: classify the user's message ───────────────────────────
@@ -123,7 +131,8 @@ async function handleChatMessage(req) {
       strategy: decision.strategy,
       instruction: decision.instruction,
       pseudo,
-      relevantChunks  // RAG: populated if book is indexed, empty otherwise
+      relevantChunks,
+      learnerState: stateSnapshot   // current understanding profile for this book
     });
     replyText = result.replyText;
 

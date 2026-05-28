@@ -23,6 +23,7 @@ const coordinator = require('./cognition/coordinator');
 const whatsapp = require('./whatsapp');
 const { extractContent } = require('./bookProcessor');
 const knowledgeMap = require('./cognition/knowledge_map');
+const lessonPlan = require('./cognition/lesson_plan');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
@@ -100,12 +101,16 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
       `📚 *${book.title}* עלה בהצלחה!\n${files.length} קבצים עובדו. מסדר עכשיו אינדקס...`
     );
 
-    // Background: build RAG index → notify when ready
+    // Background: build RAG index → generate roadmap → notify when ready
     if (content.length > 100) {
       knowledgeMap.ingest(book.id, content)
-        .then(() => whatsapp.notifyUser(
-          `✅ *${book.title}* מוכן ללמידה!\nאני יודע לצטט מהחומר בדיוק. תוכל לשאול אותי משהו עליו.`
-        ))
+        .then(async () => {
+          const roadmap = await lessonPlan.build(book.title, content);
+          const msg = roadmap
+            ? `✅ *${book.title}* מוכן ללמידה!\n\n${roadmap}\n\n_ספר לי מאיפה להתחיל או שאל משהו ספציפי._`
+            : `✅ *${book.title}* מוכן ללמידה!`;
+          await whatsapp.notifyUser(msg);
+        })
         .catch(e => console.error('[server] RAG ingestion error:', e.message));
     }
   } catch (err) {
