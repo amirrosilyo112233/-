@@ -43,6 +43,49 @@ function normalizePhone(senderId) {
 }
 
 /**
+ * Split a long WhatsApp message into chunks at natural paragraph/sentence boundaries.
+ * WhatsApp has no hard limit but >1300 chars = bad UX on mobile.
+ * @param {string} text
+ * @param {number} [maxChars=1300]
+ * @returns {string[]}
+ */
+function splitForWhatsApp(text, maxChars = 1300) {
+  if (!text || text.length <= maxChars) return [text];
+
+  const chunks = [];
+  const paragraphs = text.split(/\n{2,}/);
+  let current = '';
+
+  for (const para of paragraphs) {
+    const candidate = current ? current + '\n\n' + para : para;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      // Flush current buffer if it has content
+      if (current) { chunks.push(current.trim()); current = ''; }
+
+      if (para.length <= maxChars) {
+        current = para;
+      } else {
+        // Split oversized paragraph at sentence boundaries
+        const parts = para.split(/(?<=[.!?])\s+/);
+        for (const part of parts) {
+          const cand = current ? current + ' ' + part : part;
+          if (cand.length <= maxChars) {
+            current = cand;
+          } else {
+            if (current) { chunks.push(current.trim()); }
+            current = part;
+          }
+        }
+      }
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks.filter(Boolean);
+}
+
+/**
  * Convert Gemini-flavored markdown to WhatsApp's text formatting syntax.
  * - **bold** → *bold*
  * - __italic__ or *italic* (single, non-bold) → _italic_
@@ -278,9 +321,18 @@ async function handleIncomingWebhook(payload) {
   await db.addMessage(book.id, 'assistant', reply);
   await db.updateBook(book.id, {});
 
-  // ── Format reply for WhatsApp + send as quote-reply to original message ──
+  // ── Format + split + send ─────────────────────────────────────────────────
   const formatted = formatForWhatsApp(reply);
-  await sendReply(chatId, formatted, incomingMessageId);
+  const chunks = splitForWhatsApp(formatted); // split at 1300 chars
+
+  // First chunk: quote-reply to the original message
+  await sendReply(chatId, chunks[0], incomingMessageId);
+
+  // Subsequent chunks: plain follow-up messages (short delay between each)
+  for (let i = 1; i < chunks.length; i++) {
+    await new Promise(r => setTimeout(r, 600));
+    await sendReply(chatId, chunks[i]);
+  }
 
   eventLog.log({
     type: 'whatsapp_sent',
@@ -290,6 +342,7 @@ async function handleIncomingWebhook(payload) {
       to: phone,
       replyLength: formatted.length,
       originalLength: reply.length,
+      chunks: chunks.length,
       chatId,
       quoted: !!incomingMessageId
     }
@@ -298,4 +351,4 @@ async function handleIncomingWebhook(payload) {
   return { status: 'sent', bookId: book.id };
 }
 
-module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, normalizePhone, formatForWhatsApp };
+module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, normalizePhone, formatForWhatsApp, splitForWhatsApp };
