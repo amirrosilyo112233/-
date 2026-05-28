@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json({ limit: '500mb' }));
 
 const { buildPrompt } = require('./tutor-style');
+const coordinator = require('./cognition/coordinator');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
@@ -118,27 +119,16 @@ app.post('/api/books/:id/chat', async (req, res) => {
     await db.addMessage(bookId, 'user', message);
 
     const history = await db.getRecentMessages(bookId, 20);
-    const systemPrompt = buildPrompt(profile, book);
 
-    // Build Gemini history (exclude last user message)
-    // Gemini requires the first history entry to be role 'user'
-    let geminiHistory = history.slice(0, -1).map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
-    // Trim leading 'model' entries — they break the API
-    while (geminiHistory.length > 0 && geminiHistory[0].role === 'model') {
-      geminiHistory.shift();
-    }
-
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: systemPrompt
+    // ── Cognition runtime entry point ─────────────────────────────────────────
+    // The coordinator owns the LLM call. Host keeps DB ops + post-processing.
+    const { reply } = await coordinator.handleChatMessage({
+      bookId,
+      userMessage: message,
+      profile,
+      book,
+      recentMessages: history
     });
-
-    const chat = model.startChat({ history: geminiHistory });
-    const result = await chat.sendMessage(message);
-    const reply = result.response.text();
 
     await db.addMessage(bookId, 'assistant', reply);
     await db.updateBook(bookId, {});

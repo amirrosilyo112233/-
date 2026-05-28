@@ -102,6 +102,20 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // ── Cognition runtime events ────────────────────────────────────────────────
+  await q(`
+    CREATE TABLE IF NOT EXISTS events (
+      id SERIAL PRIMARY KEY,
+      book_id INT,
+      type TEXT NOT NULL,
+      agent TEXT,
+      payload JSONB DEFAULT '{}'::jsonb,
+      latency_ms INT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_events_book_id ON events(book_id, id);
+    CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+  `);
   console.log('✅ Postgres schema ready');
 }
 
@@ -385,6 +399,33 @@ const db = {
     qa.push(item);
     jSave('chapter_qa', qa);
     return item;
+  },
+
+  // ── Cognition events ────────────────────────────────────────────────────────
+  async addEvent({ type, bookId = null, agent = null, payload = {}, latencyMs = null }) {
+    if (useDb) {
+      await q(
+        `INSERT INTO events (book_id, type, agent, payload, latency_ms) VALUES ($1, $2, $3, $4, $5)`,
+        [bookId ? parseInt(bookId) : null, type, agent, JSON.stringify(payload || {}), latencyMs]
+      );
+      return;
+    }
+    const events = jLoad('events');
+    events.push({
+      id: jNextId(events),
+      book_id: bookId ? parseInt(bookId) : null,
+      type, agent, payload: payload || {},
+      latency_ms: latencyMs,
+      created_at: new Date().toISOString()
+    });
+    jSave('events', events);
+  },
+
+  async getRecentEvents(limit = 100) {
+    if (useDb) {
+      return await q(`SELECT * FROM events ORDER BY id DESC LIMIT $1`, [limit]);
+    }
+    return jLoad('events').slice(-limit).reverse();
   },
 
   initSchema
