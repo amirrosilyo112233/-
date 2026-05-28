@@ -175,6 +175,86 @@ async function transcribeAudio(downloadUrl, mimeType) {
 }
 
 /**
+ * Generate Hebrew speech from text via Google Cloud TTS and send to WhatsApp
+ * as a voice note. Uses OGG_OPUS so it appears as a proper voice message
+ * (round play button), not as a file attachment.
+ *
+ * @param {string} chatId           e.g. "972587440557@c.us"
+ * @param {string} text             text to speak (markdown will be stripped)
+ * @param {string} [quotedMessageId] optional message to quote-reply to
+ * @returns {Promise<{ durationMs: number, audioBytes: number, charsSpoken: number }>}
+ */
+async function sendVoiceReply(chatId, text, quotedMessageId) {
+  const t0 = Date.now();
+  const apiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GOOGLE_TTS_API_KEY (or GEMINI_API_KEY) not set');
+
+  // Clean text for natural speech:
+  //   - strip markdown formatting chars
+  //   - remove emojis and decorative symbols
+  //   - collapse divider lines and excess whitespace
+  const cleanText = (text || '')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/[`~]/g, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^---+\s*$/gm, '')
+    .replace(/^•\s+/gm, '')
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/[\u{1F000}-\u{1F02F}]/gu, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  if (!cleanText) throw new Error('text empty after markdown cleanup');
+
+  // Google TTS hard limit is 5000 chars; we cap a bit lower for safety
+  const truncated = cleanText.substring(0, 4800);
+
+  // Synthesize speech (Hebrew Wavenet — deep male voice that matches the warm tutor persona)
+  const ttsRes = await fetch(
+    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: { text: truncated },
+        voice: { languageCode: 'he-IL', name: 'he-IL-Wavenet-D' },
+        audioConfig: { audioEncoding: 'OGG_OPUS', speakingRate: 1.05, pitch: -1.0 }
+      })
+    }
+  );
+  const data = await ttsRes.json();
+  if (data.error) throw new Error(`TTS API: ${data.error.message}`);
+  if (!data.audioContent) throw new Error('TTS returned no audio');
+
+  const audioBuffer = Buffer.from(data.audioContent, 'base64');
+
+  // Send via Green API as voice note (OGG/Opus → shows as proper WhatsApp voice msg)
+  const { instanceId, token, apiUrl } = cfg();
+  if (!instanceId || !token) throw new Error('Green API credentials missing');
+  const base = apiUrl.replace(/\/+$/, '');
+  const url = `${base}/waInstance${instanceId}/sendFileByUpload/${token}`;
+
+  const form = new FormData();
+  form.append('chatId', chatId);
+  form.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg');
+  if (quotedMessageId) form.append('quotedMessageId', quotedMessageId);
+
+  const sendRes = await fetch(url, { method: 'POST', body: form });
+  if (!sendRes.ok) {
+    const body = await sendRes.text().catch(() => '');
+    throw new Error(`Green API sendFileByUpload failed: ${sendRes.status} ${body.substring(0, 200)}`);
+  }
+
+  return {
+    durationMs: Date.now() - t0,
+    audioBytes: audioBuffer.length,
+    charsSpoken: truncated.length
+  };
+}
+
+/**
  * Send a reaction emoji to a specific message via Green API.
  * Fire-and-forget; failures are logged but do not propagate.
  */
@@ -464,14 +544,39 @@ async function handleIncomingWebhook(payload) {
   await db.addMessage(book.id, 'assistant', reply);
   await db.updateBook(book.id, {});
 
-  // ── Format + split + send ─────────────────────────────────────────────────
+  // ── Format + decide delivery mode ─────────────────────────────────────────
   const formatted = formatForWhatsApp(reply);
-  const chunks = splitForWhatsApp(formatted, 900); // ~8 lines per message on mobile
 
-  // First chunk: quote-reply to the original message
+  // If the user spoke to us, speak back. Otherwise reply in text (chunked).
+  if (voiceMeta) {
+    try {
+      const v = await sendVoiceReply(chatId, formatted, incomingMessageId);
+      eventLog.log({
+        type: 'whatsapp_sent',
+        bookId: book.id,
+        agent: 'whatsapp',
+        payload: {
+          to: phone,
+          mode: 'voice',
+          replyLength: formatted.length,
+          charsSpoken: v.charsSpoken,
+          audioBytes: v.audioBytes,
+          chatId,
+          quoted: !!incomingMessageId
+        },
+        latencyMs: v.durationMs
+      });
+      return { status: 'sent', bookId: book.id, mode: 'voice' };
+    } catch (e) {
+      console.warn('[whatsapp] voice reply failed, falling back to text:', e.message);
+      eventLog.log({ type: 'voice_reply_failed', agent: 'whatsapp', payload: { error: e.message, from: phone } });
+      // Fall through to text reply below
+    }
+  }
+
+  // Text mode (default, or voice fallback)
+  const chunks = splitForWhatsApp(formatted, 900);
   await sendReply(chatId, chunks[0], incomingMessageId);
-
-  // Subsequent chunks: plain follow-up, 800ms apart so they arrive as a readable sequence
   for (let i = 1; i < chunks.length; i++) {
     await new Promise(r => setTimeout(r, 800));
     await sendReply(chatId, chunks[i]);
@@ -483,6 +588,7 @@ async function handleIncomingWebhook(payload) {
     agent: 'whatsapp',
     payload: {
       to: phone,
+      mode: 'text',
       replyLength: formatted.length,
       originalLength: reply.length,
       chunks: chunks.length,
@@ -510,4 +616,4 @@ async function notifyUser(text) {
   }
 }
 
-module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, notifyUser, normalizePhone, formatForWhatsApp, splitForWhatsApp };
+module.exports = { handleIncomingWebhook, sendReply, sendReaction, sendVoiceReply, transcribeAudio, notifyUser, normalizePhone, formatForWhatsApp, splitForWhatsApp };
