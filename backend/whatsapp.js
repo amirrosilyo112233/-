@@ -470,6 +470,15 @@ async function handleIncomingWebhook(payload) {
       const fileRes = await fetch(downloadUrl);
       if (!fileRes.ok) throw new Error(`download failed: ${fileRes.status}`);
       const buf = Buffer.from(await fileRes.arrayBuffer());
+
+      // For larger PDFs, let user know it'll take a few minutes (OCR pipeline)
+      if (buf.length > 5 * 1024 * 1024) {
+        await sendReply(chatId,
+          `📚 קובץ של ${(buf.length / 1024 / 1024).toFixed(1)}MB התקבל. עיבוד וOCR ייקח כמה דקות, אעדכן אותך כשמוכן.`,
+          incomingMessageId
+        );
+      }
+
       const content = await extractContent(buf, fileName);
 
       const title = fileName.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').trim() || 'ספר חדש';
