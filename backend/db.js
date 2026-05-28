@@ -102,6 +102,33 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // ── RAG: book knowledge chunks ──────────────────────────────────────────────
+  await q(`
+    CREATE TABLE IF NOT EXISTS knowledge_chunks (
+      id SERIAL PRIMARY KEY,
+      book_id INT REFERENCES books(id) ON DELETE CASCADE,
+      chunk_index INT NOT NULL,
+      content TEXT NOT NULL,
+      embedding JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_chunks_book_id ON knowledge_chunks(book_id, chunk_index);
+  `);
+  // Add indexed_at to books (marks when RAG indexing finished)
+  await q(`ALTER TABLE books ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ`);
+
+  // ── RAG: learner state ───────────────────────────────────────────────────────
+  await q(`
+    CREATE TABLE IF NOT EXISTS learner_state (
+      book_id INT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+      understands_well JSONB DEFAULT '[]'::jsonb,
+      shaky JSONB DEFAULT '[]'::jsonb,
+      misconceptions JSONB DEFAULT '[]'::jsonb,
+      current_depth INT DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
   // ── Cognition runtime events ────────────────────────────────────────────────
   await q(`
     CREATE TABLE IF NOT EXISTS events (
@@ -399,6 +426,73 @@ const db = {
     qa.push(item);
     jSave('chapter_qa', qa);
     return item;
+  },
+
+  // ── RAG: knowledge chunks ────────────────────────────────────────────────────
+  async chunksExist(bookId) {
+    if (useDb) {
+      const rows = await q('SELECT 1 FROM knowledge_chunks WHERE book_id=$1 LIMIT 1', [parseInt(bookId)]);
+      return rows.length > 0;
+    }
+    return false;
+  },
+
+  async addChunks(bookId, chunks) {
+    // chunks: Array<{ chunkIndex, content, embedding: number[] }>
+    if (useDb) {
+      for (const c of chunks) {
+        await q(
+          `INSERT INTO knowledge_chunks (book_id, chunk_index, content, embedding) VALUES ($1,$2,$3,$4)`,
+          [parseInt(bookId), c.chunkIndex, c.content, JSON.stringify(c.embedding || null)]
+        );
+      }
+      await q(`UPDATE books SET indexed_at=NOW(), updated_at=NOW() WHERE id=$1`, [parseInt(bookId)]);
+      return;
+    }
+    // JSON fallback (no embedding support — skip silently)
+  },
+
+  async getChunks(bookId) {
+    if (useDb) {
+      return await q(
+        `SELECT chunk_index, content, embedding FROM knowledge_chunks WHERE book_id=$1 ORDER BY chunk_index ASC`,
+        [parseInt(bookId)]
+      );
+    }
+    return [];
+  },
+
+  async deleteChunks(bookId) {
+    if (useDb) {
+      await q('DELETE FROM knowledge_chunks WHERE book_id=$1', [parseInt(bookId)]);
+      await q('UPDATE books SET indexed_at=NULL WHERE id=$1', [parseInt(bookId)]);
+    }
+  },
+
+  // ── RAG: learner state ───────────────────────────────────────────────────────
+  async getLearnerState(bookId) {
+    if (useDb) {
+      const rows = await q('SELECT * FROM learner_state WHERE book_id=$1', [parseInt(bookId)]);
+      if (rows.length > 0) return rows[0];
+      return { book_id: parseInt(bookId), understands_well: [], shaky: [], misconceptions: [], current_depth: 0 };
+    }
+    return { book_id: parseInt(bookId), understands_well: [], shaky: [], misconceptions: [], current_depth: 0 };
+  },
+
+  async upsertLearnerState(bookId, data) {
+    if (!useDb) return;
+    await q(`
+      INSERT INTO learner_state (book_id, understands_well, shaky, misconceptions, current_depth, updated_at)
+      VALUES ($1,$2,$3,$4,$5,NOW())
+      ON CONFLICT (book_id) DO UPDATE SET
+        understands_well=$2, shaky=$3, misconceptions=$4, current_depth=$5, updated_at=NOW()
+    `, [
+      parseInt(bookId),
+      JSON.stringify(data.understands_well || []),
+      JSON.stringify(data.shaky || []),
+      JSON.stringify(data.misconceptions || []),
+      data.current_depth || 0
+    ]);
   },
 
   // ── Cognition events ────────────────────────────────────────────────────────

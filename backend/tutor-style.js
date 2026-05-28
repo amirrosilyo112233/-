@@ -1,16 +1,35 @@
 // SYSTEM IDENTITY — Personal Human Tutor
 // Rewritten based on 3-layer architecture: Identity + Teaching Mechanism + Human Flow
 
-function buildPrompt(profile, book) {
+/**
+ * @param {Object} profile
+ * @param {Object} book
+ * @param {string[]} [relevantChunks]  RAG: top-K chunks from knowledge_map.
+ *   When provided → used instead of full book content (much smaller, more focused).
+ *   When empty   → falls back to full book content (pre-RAG behaviour).
+ */
+function buildPrompt(profile, book, relevantChunks = []) {
   const topics = Array.isArray(book?.completed_topics) ? book.completed_topics : [];
   const name = profile?.name || 'אמיר';
   const profession = profile?.profession || 'מטפל וקואצ\'ר לנוער בסיכון, אבא';
   const bookTitle = book?.title || '';
 
-  const bookContent = (book?.content || '').toString();
-  const truncated = bookContent.length > 200000
-    ? bookContent.substring(0, 200000) + '\n\n[...החומר ארוך — קוצץ כאן]'
-    : bookContent;
+  // RAG: prefer retrieved chunks; fall back to full content
+  let bookSection;
+  if (relevantChunks && relevantChunks.length > 0) {
+    const chunksText = relevantChunks
+      .map((c, i) => `--- קטע ${i + 1} (רלוונטי לשאלה) ---\n${c}`)
+      .join('\n\n');
+    bookSection = `אלו הקטעים הרלוונטיים ביותר מהספר לשאלה הנוכחית:\n\n${chunksText}\n\nענה *מהקטעים האלה בלבד*. ציין מה שכתוב שם בשמות המדויקים שהמחבר משתמש בהם.`;
+  } else {
+    const bookContent = (book?.content || '').toString();
+    const truncated = bookContent.length > 200000
+      ? bookContent.substring(0, 200000) + '\n\n[...החומר ארוך — קוצץ כאן]'
+      : bookContent;
+    bookSection = truncated || '(אין תוכן זמין — בקש מ-' + name + ' להעלות חומר)';
+  }
+
+  const ragMode = relevantChunks && relevantChunks.length > 0;
 
   return `אתה לא צ'אט AI רגיל.
 
@@ -55,13 +74,10 @@ function buildPrompt(profile, book) {
 
 # כלל ברזל: ענה מהחומר — לא מהידע הכללי שלך
 
-לפני שאתה עונה — חפש בחומר שלמטה. ענה עם:
-- שמות המודלים כפי שהמחבר קורא להם
-- "לפי [שם מהספר]..."
-- "מה שלמדנו על [נושא]..."
-- "המחבר מדבר על זה כ..."
-
-אם הנושא לא מופיע בחומר — אמור זאת. אל תמציא.
+${ragMode
+  ? 'הקטעים לעיל הם מה שהמחבר כתב על הנושא. ענה *רק* מהם. ציין שמות מושגים בדיוק כפי שהמחבר כותב אותם. אם הנושא לא מכוסה בקטעים — אמור זאת ישירות.'
+  : 'ענה עם שמות המודלים כפי שהמחבר קורא להם: "לפי [שם מהספר]...", "המחבר מדבר על זה כ...". אל תמציא מה שלא כתוב בחומר.'
+}
 
 ---
 
@@ -83,11 +99,9 @@ function buildPrompt(profile, book) {
 
 ---
 
-# חומר: מה שתלמד ממנו
+# חומר${ragMode ? ' — קטעים רלוונטיים (RAG)' : ' — תוכן הספר'}
 
-**חשוב ביותר:** מה שכתוב כאן הוא החומר היחיד שממנו אתה מלמד.
-
-${truncated || '(אין תוכן זמין — בקש מ-' + name + ' להעלות חומר)'}
+${bookSection}
 
 ---
 

@@ -122,4 +122,16 @@ async function chatJson({ provider = 'openai', model, systemInstruction, userMes
   throw new Error(`chatJson: provider not implemented: ${provider}`);
 }
 
-module.exports = { chat, generate, chatJson };
+/**
+ * Generate an embedding vector for a text string.
+ * Uses Gemini text-embedding-004 (768 dimensions).
+ * @param {string} text
+ * @returns {Promise<number[]>}
+ */
+async function embedText(text) {
+  const model = gemini().getGenerativeModel({ model: 'text-embedding-004' });
+  const result = await model.embedContent(text);
+  return result.embedding.values;
+}
+
+module.exports = { chat, generate, chatJson, embedText };

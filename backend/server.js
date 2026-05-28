@@ -22,6 +22,7 @@ const { buildPrompt } = require('./tutor-style');
 const coordinator = require('./cognition/coordinator');
 const whatsapp = require('./whatsapp');
 const { extractContent } = require('./bookProcessor');
+const knowledgeMap = require('./cognition/knowledge_map');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
@@ -94,9 +95,16 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
 
     res.json({ id: book.id, title: book.title, filesProcessed: files.length });
 
+    // Background: build RAG index (fire-and-forget — don't block response)
+    if (content.length > 100) {
+      knowledgeMap.ingest(book.id, content).catch(e =>
+        console.error('[server] RAG ingestion error:', e.message)
+      );
+    }
+
     // Notify via WhatsApp (fire-and-forget)
     whatsapp.notifyUser(
-      `📚 *${book.title}* עלה בהצלחה דרך האתר!\n${files.length} קבצים עובדו. תוכל לשאול אותי עליו עכשיו בוואטסאפ.`
+      `📚 *${book.title}* עלה בהצלחה דרך האתר!\n${files.length} קבצים עובדו. מסדר עכשיו את אינדקס החיפוש — בעוד כמה דקות הבוט יוכל לצטט מהספר בדיוק.`
     );
   } catch (err) {
     console.error('Upload error:', err.message);

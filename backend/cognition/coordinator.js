@@ -18,6 +18,8 @@ const antiPseudo = require('./anti_pseudo');
 const routing = require('./routing');
 const teacher = require('./teacher');
 const eventLog = require('./event_log');
+const knowledgeMap = require('./knowledge_map');
+const learnerState = require('./learner_state');
 
 /**
  * @param {import('./schemas').ChatRequest} req
@@ -33,6 +35,25 @@ async function handleChatMessage(req) {
     agent: 'coordinator',
     payload: { messageLength: (userMessage || '').length, historyCount: (recentMessages || []).length }
   });
+
+  // ── 0. RAG: retrieve relevant book chunks if indexed ─────────────────────
+  let relevantChunks = [];
+  if (book?.indexed_at) {
+    try {
+      const ragResult = await knowledgeMap.query(bookId, userMessage);
+      if (ragResult.found) {
+        relevantChunks = ragResult.chunks;
+        eventLog.log({
+          type: 'rag_retrieved',
+          bookId,
+          agent: 'knowledge_map',
+          payload: { chunksFound: relevantChunks.length, queryLength: (userMessage || '').length }
+        });
+      }
+    } catch (e) {
+      console.warn('[coordinator] RAG query failed, falling back to full content:', e.message);
+    }
+  }
 
   // ── 1. Anti-Pseudo: classify the user's message ───────────────────────────
   // Find the most recent assistant message in history (the prior teacher turn).
@@ -101,7 +122,8 @@ async function handleChatMessage(req) {
       profile, book, recentMessages, userMessage,
       strategy: decision.strategy,
       instruction: decision.instruction,
-      pseudo
+      pseudo,
+      relevantChunks  // RAG: populated if book is indexed, empty otherwise
     });
     replyText = result.replyText;
 
@@ -128,6 +150,9 @@ async function handleChatMessage(req) {
     });
     throw err;
   }
+
+  // ── Update Learner-State (fire-and-forget) ────────────────────────────────
+  learnerState.update(bookId, pseudo, book?.current_chapter || decision.strategy);
 
   eventLog.log({
     type: 'chat_completed',

@@ -15,4 +15,13 @@ async function getRecentEvents(limit = 100) {
   return db.getRecentEvents(limit);
 }
 
-module.exports = { insertEvent, getRecentEvents };
+// ── RAG ───────────────────────────────────────────────────────────────────────
+async function addChunks(bookId, chunks) { return db.addChunks(bookId, chunks); }
+async function getChunks(bookId) { return db.getChunks(bookId); }
+async function deleteChunks(bookId) { return db.deleteChunks(bookId); }
+
+// ── Learner State ─────────────────────────────────────────────────────────────
+async function getLearnerState(bookId) { return db.getLearnerState(bookId); }
+async function upsertLearnerState(bookId, data) { return db.upsertLearnerState(bookId, data); }
+
+module.exports = { insertEvent, getRecentEvents, addChunks, getChunks, deleteChunks, getLearnerState, upsertLearnerState };

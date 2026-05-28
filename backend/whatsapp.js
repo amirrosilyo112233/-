@@ -16,6 +16,7 @@ const coordinator = require('./cognition/coordinator');
 const eventLog = require('./cognition/event_log');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { extractContent } = require('./bookProcessor');
+const knowledgeMap = require('./cognition/knowledge_map');
 
 // Lazy Gemini client for voice transcription (host code — not via llm_adapter)
 let _gemini = null;
@@ -287,9 +288,15 @@ async function handleIncomingWebhook(payload) {
       const book = await db.addBook({ title, language: 'en', content });
 
       await sendReply(chatId,
-        `📚 *${book.title}* עלה בהצלחה!\n\nהספר שמור ואפשר להתחיל ללמוד. תוכל לפנות לאתר לפתוח שיחה, או לשאול אותי עכשיו משהו מהחומר.`,
+        `📚 *${book.title}* עלה בהצלחה!\n\nמסדר עכשיו את אינדקס החיפוש — בעוד כמה דקות תוכל לשאול אותי שאלות מהחומר ואני אצטט בדיוק.`,
         incomingMessageId
       );
+      // Background RAG ingestion
+      if (content.length > 100) {
+        knowledgeMap.ingest(book.id, content).catch(e =>
+          console.error('[whatsapp] RAG ingestion error:', e.message)
+        );
+      }
       eventLog.log({ type: 'whatsapp_book_uploaded', agent: 'whatsapp', bookId: book.id, payload: { from: phone, title: book.title, fileName } });
       return { status: 'book_uploaded', bookId: book.id };
     } catch (err) {

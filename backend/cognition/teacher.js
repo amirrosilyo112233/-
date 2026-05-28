@@ -51,16 +51,17 @@ function pickModel({ pseudo, userMessage, recentMessages }) {
  * @param {import('./schemas').Profile} args.profile
  * @param {import('./schemas').Book}    args.book
  * @param {import('./schemas').StoredMessage[]} args.recentMessages
- *        Includes the just-saved user message as the LAST entry.
  * @param {string} args.userMessage
- * @param {string} [args.strategy]     One of routing.STRATEGIES
- * @param {string} [args.instruction]  Short directive (Hebrew) from routing agent
- * @param {import('./schemas').AntiPseudoResult} [args.pseudo]  Used to pick model
- * @param {string} [args.model]        Explicit override; if omitted, pickModel() decides
- * @returns {Promise<{ replyText: string, meta: { model: string, modelReason: string, historyLength: number, strategy: string|null } }>}
+ * @param {string} [args.strategy]
+ * @param {string} [args.instruction]
+ * @param {import('./schemas').AntiPseudoResult} [args.pseudo]
+ * @param {string} [args.model]          Explicit model override
+ * @param {string[]} [args.relevantChunks]  RAG: top-K chunks from knowledge_map
+ * @returns {Promise<{ replyText: string, meta: object }>}
  */
-async function respond({ profile, book, recentMessages, userMessage, strategy, instruction, pseudo, model }) {
-  const basePrompt = buildPrompt(profile, book);
+async function respond({ profile, book, recentMessages, userMessage, strategy, instruction, pseudo, model, relevantChunks }) {
+  // Build base prompt. If RAG chunks provided, pass them; otherwise fall back to full content.
+  const basePrompt = buildPrompt(profile, book, relevantChunks || []);
   const choice = model
     ? { model, reason: 'explicit_override' }
     : pickModel({ pseudo, userMessage, recentMessages });
