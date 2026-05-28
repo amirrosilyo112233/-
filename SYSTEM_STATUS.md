@@ -59,9 +59,9 @@
 
 | Provider | Status | Phase | Used by | Notes |
 |---|---|---|---|---|
-| Gemini 2.5 Flash | `WORKING` | 1 | Teacher (default ~85% of turns) | fast routine replies |
-| Gemini 2.5 Pro | `WORKING` | 2 | Teacher (~15% — deep moments), Vision, chapter summary, chapter QA, field log | hybrid selection via `teacher.pickModel()`: genuine+d3, first turn, long substantive |
-| OpenAI GPT-4o-mini | `WORKING` | 2 | Anti-Pseudo | `OPENAI_API_KEY` set on Render; JSON mode used |
+| Gemini 3.5 Flash | `WORKING` | 4 | Teacher (default ~85%), Anti-Pseudo, Voice transcription | upgraded from 2.5; 4x faster |
+| Gemini 3.1 Pro | `WORKING` | 4 | Teacher (~15% — deep moments), Vision (upload), chapter summary, chapter QA, field log | upgraded from 2.5; 60% cheaper than Claude Opus, better Hebrew than 2.5 |
+| OpenAI GPT-4o-mini | `WORKING` (unused) | — | (none — historic Anti-Pseudo, replaced by Gemini in Phase 4) | env var still on Render but no code path calls it |
 | OpenAI text-embedding-3-large | `NOT_STARTED` | 3 | Knowledge Map | only when embeddings retrieval lands |
 
 ---

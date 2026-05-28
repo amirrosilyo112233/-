@@ -16,8 +16,11 @@ const fs = require('fs');
 const path = require('path');
 const llm = require('./adapters/llm_adapter');
 
-const MODEL = 'gpt-4o-mini';
-const PROVIDER = 'openai';
+// Switched May 2026: gpt-4o-mini → gemini-3.5-flash
+// Reasoning: cheaper, faster, comparable Hebrew classification quality,
+// removes dependency on a 2nd LLM provider for the chat path.
+const MODEL = 'gemini-3.5-flash';
+const PROVIDER = 'gemini';
 
 // Load prompt once at module init
 const PROMPT_PATH = path.join(__dirname, 'prompts', 'anti_pseudo.txt');
@@ -42,8 +45,17 @@ async function evaluate({ userMessage, lastTeacherMessage, currentTopic }) {
     };
   }
 
-  // Empty assent: short message that is just agreement → evasion
   const trimmed = (userMessage || '').trim();
+
+  // Any question → never evasion (deterministic protection against over-flagging)
+  if (trimmed.includes('?') || trimmed.includes('؟')) {
+    return {
+      signal: 'genuine', depth: 2, reason: 'שאלה לגיטימית',
+      durationMs: Date.now() - t0, deterministic: true
+    };
+  }
+
+  // Empty assent: short message that is just agreement → evasion
   const EMPTY_ASSENT = /^(הבנתי|כן|אוקיי|אוקי|ברור|מעניין|טוב|נהדר|מצוין|תודה|ok|okay|got it|i see|yes)\.?$/i;
   if (trimmed.length < 10 && EMPTY_ASSENT.test(trimmed)) {
     return {
@@ -61,6 +73,7 @@ async function evaluate({ userMessage, lastTeacherMessage, currentTopic }) {
 
   try {
     const parsed = await llm.chatJson({
+      provider: PROVIDER,
       model: MODEL,
       systemInstruction: SYSTEM_PROMPT,
       userMessage: userPayload,

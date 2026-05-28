@@ -71,33 +71,55 @@ async function generate({ provider, model, prompt }) {
 }
 
 /**
- * Structured JSON completion. OpenAI only — uses response_format=json_object to
- * guarantee parseable JSON. Returns a parsed object.
+ * Structured JSON completion. Supports OpenAI (response_format) and
+ * Gemini (responseMimeType=application/json) — both guarantee parseable JSON.
+ * Returns a parsed object.
+ *
  * @param {Object} args
- * @param {string} args.model           e.g. 'gpt-4o-mini'
+ * @param {'openai'|'gemini'} [args.provider]   default 'openai' for back-compat
+ * @param {string} args.model            e.g. 'gpt-4o-mini' | 'gemini-3.5-flash'
  * @param {string} args.systemInstruction
  * @param {string} args.userMessage
- * @param {number} [args.temperature]   default 0.2 (low — we want classification, not creativity)
- * @param {number} [args.maxTokens]     default 200
+ * @param {number} [args.temperature]    default 0.2
+ * @param {number} [args.maxTokens]      default 200
  * @returns {Promise<Object>}
  */
-async function chatJson({ model, systemInstruction, userMessage, temperature = 0.2, maxTokens = 200 }) {
-  const resp = await openai().chat.completions.create({
-    model,
-    response_format: { type: 'json_object' },
-    temperature,
-    max_tokens: maxTokens,
-    messages: [
-      { role: 'system', content: systemInstruction },
-      { role: 'user', content: userMessage }
-    ]
-  });
-  const raw = resp.choices[0].message.content;
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`chatJson: model returned non-JSON despite response_format. raw="${raw.substring(0, 200)}"`);
+async function chatJson({ provider = 'openai', model, systemInstruction, userMessage, temperature = 0.2, maxTokens = 200 }) {
+  if (provider === 'openai') {
+    const resp = await openai().chat.completions.create({
+      model,
+      response_format: { type: 'json_object' },
+      temperature,
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userMessage }
+      ]
+    });
+    const raw = resp.choices[0].message.content;
+    try { return JSON.parse(raw); }
+    catch (e) {
+      throw new Error(`chatJson(openai): non-JSON despite response_format. raw="${raw.substring(0, 200)}"`);
+    }
   }
+  if (provider === 'gemini') {
+    const m = gemini().getGenerativeModel({
+      model,
+      systemInstruction,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        responseMimeType: 'application/json'
+      }
+    });
+    const result = await m.generateContent(userMessage);
+    const raw = result.response.text();
+    try { return JSON.parse(raw); }
+    catch (e) {
+      throw new Error(`chatJson(gemini): non-JSON despite responseMimeType. raw="${raw.substring(0, 200)}"`);
+    }
+  }
+  throw new Error(`chatJson: provider not implemented: ${provider}`);
 }
 
 module.exports = { chat, generate, chatJson };

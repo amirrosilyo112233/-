@@ -69,7 +69,8 @@ async function handleChatMessage(req) {
   });
 
   // ── 2. Routing: deterministic strategy decision ───────────────────────────
-  const decision = routing.decide({ pseudo });
+  // userMessage is passed so RICH_TEACHING can detect long, open questions.
+  const decision = routing.decide({ pseudo, userMessage });
 
   eventLog.log({
     type: 'routing_decided',

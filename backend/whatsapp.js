@@ -120,7 +120,7 @@ async function transcribeAudio(downloadUrl, mimeType) {
   const detectedMime = mimeType || res.headers.get('content-type')?.split(';')[0]?.trim() || 'audio/ogg';
   const base64 = buf.toString('base64');
 
-  const model = gemini().getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = gemini().getGenerativeModel({ model: 'gemini-3.5-flash' });
   const result = await model.generateContent([
     { inlineData: { data: base64, mimeType: detectedMime } },
     'תמלל את ההקלטה הזו לעברית בלבד. החזר אך ורק את הטקסט המדויק שנאמר — בלי הסברים, בלי כותרות, בלי הערות שלך. אם ההקלטה ריקה או לא מובנת, החזר את המחרוזת "[לא ברור]".'

@@ -1,13 +1,15 @@
 /**
  * Cognitive Routing Agent — deterministic decision tree.
  *
- * Input:  AntiPseudoResult (+ optional context)
- * Output: { strategy: Strategy, instruction: string }
+ * Input:  AntiPseudoResult (+ optional context: userMessage)
+ * Output: { strategy: Strategy, instruction: string, ruleId: string }
  *
  * No LLM. Pure rules. Fast (< 1ms). Easy to audit.
  *
- * Strategy → what the teacher should do this turn.
- * Instruction → a short directive prepended to the teacher's system prompt.
+ * Updated May 2026:
+ *   - Softer BACKTRACK / CHALLENGE language (mentor, not police)
+ *   - New RICH_TEACHING strategy for genuine+deep+open-ended questions
+ *     (flowing prose, weaves models together, no bullet lists)
  */
 
 const STRATEGIES = {
@@ -16,22 +18,24 @@ const STRATEGIES = {
   EXPLAIN_DEEPER: 'EXPLAIN_DEEPER',
   EXAMPLE: 'EXAMPLE',
   MOVE_FORWARD: 'MOVE_FORWARD',
+  RICH_TEACHING: 'RICH_TEACHING',
   WAIT_FOR_USER: 'WAIT_FOR_USER'
 };
 
 // Hebrew directives — short, surgical. Prepended to the existing buildPrompt.
-// Designed to OVERRIDE the teacher's default "lecture-heavy" tendency.
 const INSTRUCTIONS = {
   CHALLENGE:
-    'הלומד חזר על המילים שלך בלי תוכן משלו. אל תרצה. ענה במשפט אחד בלבד: בקש שיסביר במילים שלו או יביא דוגמה מהחיים שלו. אל תוסיף הסברים. אל תוסיף מסגרות. אל תוסיף תוכן חדש.',
+    'הלומד נתן תגובה שחוזרת על מה שאמרת בלי תוכן משלו. אל תמשיך לתוך תוכן חדש. במקום זה — שאל אותו במשפט אחד או שניים שינסח את הרעיון במילים שלו, או יביא דוגמה מהחיים שלו. שאל בחום, לא בעצירה דרמטית. בלי "🛑". בלי "עצור".',
   BACKTRACK:
-    'הלומד התחמק או ענה תשובה ריקה ("הבנתי", "כן", "אוקיי"). אסור לתת לזה לעבור. ענה ב-2 שורות בלבד: עצור, החזר אותו לנקודה האחרונה, ובקש הוכחה ספציפית להבנה (דוגמה, ניסוח שלו, מקרה מהשטח). אל תרצה. אל תרחיב.',
+    'התשובה הייתה קצרה מאוד ולא הראתה הבנה. שאל אותו שאלה אחת פתוחה וחמה שמזמינה אותו לספר מהחיים שלו. משפט אחד, טון של שותף לא שופט. לא "הוכח לי", לא "עצור", לא "אסור". פשוט שאלה שפותחת דלת.',
   EXPLAIN_DEEPER:
     'הלומד הבין חלקית. תעמיק את החלק שהוא פספס — לא תוסיף מסגרות חדשות, רק תחדד את מה שלא היה ברור. ענה קצר וממוקד (3-5 שורות).',
   EXAMPLE:
     'הלומד הבין את הרעיון אבל ברמה תיאורטית. תן דוגמה אחת קונקרטית מחיים אמיתיים — קצרה (4-6 שורות) — ושאל אותו לזהות את אותו דפוס במקרה משלו.',
   MOVE_FORWARD:
     'הלומד הראה הבנה אמיתית. תמשיך הלאה לנושא או לרמה הבאה. אל תחזור על מה שכבר ברור לו. תקדם.',
+  RICH_TEACHING:
+    'הלומד שאל שאלה עמוקה ופתוחה — הוא רוצה ללמוד, לא לקבל בולטים. ענה כפרק זורם, גוף ראשון ("אני חושב על זה ככה"), כורך את המודלים הרלוונטיים מהספר לשיטה אחת קוהרנטית. בלי בולטים. בלי רשימות. בלי כותרות מסגרות עם ═══. פסקאות בגובה העיניים, מטאפורות מהשטח של אמיר (אבא, מטפל לנוער בסיכון). 1500-2200 תווים — מספיק כדי להעמיק, לא יותר.',
   WAIT_FOR_USER:
     'משוב מינימלי בלבד. אל תפתח נושא חדש. שאלה קצרה אחת או הכרה במה שנאמר.'
 };
@@ -39,12 +43,23 @@ const INSTRUCTIONS = {
 /**
  * @param {Object} args
  * @param {{signal: string, depth: number}} args.pseudo
+ * @param {string} [args.userMessage]   For RICH_TEACHING detection (length + question mark)
  * @returns {{strategy: string, instruction: string, ruleId: string}}
  */
-function decide({ pseudo }) {
+function decide({ pseudo, userMessage }) {
   const { signal, depth } = pseudo || { signal: 'partial', depth: 1 };
 
   // ── Rule table (top-to-bottom; first match wins) ───────────────────────────
+
+  // R0: deep + open question → rich teaching (NEW)
+  // Triggers when user asks a genuine, substantive question (long, with ?)
+  const msg = userMessage || '';
+  const hasQuestion = msg.includes('?') || msg.includes('؟');
+  const isLong = msg.length >= 60;
+  if (signal === 'genuine' && depth >= 2 && hasQuestion && isLong) {
+    return { strategy: STRATEGIES.RICH_TEACHING, instruction: INSTRUCTIONS.RICH_TEACHING, ruleId: 'R0_rich_question' };
+  }
+
   if (signal === 'evasion') {
     return { strategy: STRATEGIES.BACKTRACK, instruction: INSTRUCTIONS.BACKTRACK, ruleId: 'R1_evasion' };
   }
@@ -61,7 +76,7 @@ function decide({ pseudo }) {
   if (depth === 2) {
     return { strategy: STRATEGIES.EXAMPLE, instruction: INSTRUCTIONS.EXAMPLE, ruleId: 'R5_genuine_mid' };
   }
-  // depth 0-1 with signal=genuine — odd combo, default to deeper explanation
+  // depth 0-1 with signal=genuine — default to deeper explanation
   return { strategy: STRATEGIES.EXPLAIN_DEEPER, instruction: INSTRUCTIONS.EXPLAIN_DEEPER, ruleId: 'R6_genuine_shallow' };
 }
 
