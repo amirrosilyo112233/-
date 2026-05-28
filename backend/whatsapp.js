@@ -35,27 +35,85 @@ function normalizePhone(senderId) {
 }
 
 /**
- * Send a text message via Green API.
+ * Convert Gemini-flavored markdown to WhatsApp's text formatting syntax.
+ * - **bold** → *bold*
+ * - __italic__ or *italic* (single, non-bold) → _italic_
+ * - ## Title / # Title → *Title*
+ * - markdown bullets (* or -) → • bullet character
+ * - code fences ``` are kept (WhatsApp supports them)
+ * - excessive blank lines collapsed (3+ newlines → 2)
  */
-async function sendReply(chatId, text) {
+function formatForWhatsApp(text) {
+  if (!text) return text;
+  let s = text;
+
+  // Headers (## or # at line start) → bold line
+  s = s.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
+
+  // **bold** → *bold*  (do this BEFORE single-asterisk italics)
+  s = s.replace(/\*\*(.+?)\*\*/g, '*$1*');
+
+  // markdown bullets at line start: "* item" or "- item" → "• item"
+  // (but only if it's clearly a list marker, not part of emphasis)
+  s = s.replace(/^(\s*)[*\-]\s+/gm, '$1• ');
+
+  // __italic__ → _italic_
+  s = s.replace(/__([^_]+)__/g, '_$1_');
+
+  // Collapse 3+ blank lines to 2
+  s = s.replace(/\n{3,}/g, '\n\n');
+
+  // Trim trailing whitespace per line
+  s = s.split('\n').map(line => line.replace(/[ \t]+$/, '')).join('\n');
+
+  return s.trim();
+}
+
+/**
+ * Send a text message via Green API.
+ * @param {string} chatId             e.g. "972587440557@c.us"
+ * @param {string} text               message body
+ * @param {string} [quotedMessageId]  optional Green API message id to quote-reply to
+ */
+async function sendReply(chatId, text, quotedMessageId) {
   const { instanceId, token, apiUrl } = cfg();
   if (!instanceId || !token) {
     throw new Error('GREEN_API_INSTANCE or GREEN_API_TOKEN not set');
   }
-  // Green API requires apiUrl to include the instance subdomain, e.g. https://7107.api.greenapi.com
-  // We honor process.env.GREEN_API_URL if set; otherwise we use the documented base.
   const base = apiUrl.replace(/\/+$/, '');
   const url = `${base}/waInstance${instanceId}/sendMessage/${token}`;
+  const body = { chatId, message: text };
+  if (quotedMessageId) body.quotedMessageId = quotedMessageId;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chatId, message: text })
+    body: JSON.stringify(body)
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Green API sendMessage failed: ${res.status} ${body.substring(0, 300)}`);
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Green API sendMessage failed: ${res.status} ${errBody.substring(0, 300)}`);
   }
   return res.json();
+}
+
+/**
+ * Send a reaction emoji to a specific message via Green API.
+ * Fire-and-forget; failures are logged but do not propagate.
+ */
+async function sendReaction(chatId, messageId, emoji) {
+  try {
+    const { instanceId, token, apiUrl } = cfg();
+    if (!instanceId || !token || !messageId) return;
+    const base = apiUrl.replace(/\/+$/, '');
+    const url = `${base}/waInstance${instanceId}/sendReaction/${token}`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, messageId, reaction: emoji })
+    });
+  } catch (e) {
+    console.warn('[whatsapp] sendReaction failed:', e.message);
+  }
 }
 
 /**
@@ -87,6 +145,7 @@ async function handleIncomingWebhook(payload) {
   const senderRaw = payload.senderData?.sender || payload.senderData?.chatId;
   const phone = normalizePhone(senderRaw);
   const chatId = payload.senderData?.chatId; // we reply to the same chatId
+  const incomingMessageId = payload.idMessage; // for quote-reply + ack-reaction
 
   // Extract text content (only text messages in MVP)
   let text = null;
@@ -121,8 +180,12 @@ async function handleIncomingWebhook(payload) {
     type: 'whatsapp_received',
     bookId: book.id,
     agent: 'whatsapp',
-    payload: { from: phone, messageLength: text.length, chatId }
+    payload: { from: phone, messageLength: text.length, chatId, idMessage: incomingMessageId }
   });
+
+  // ── Instant ack reaction so the user knows the bot is "thinking" ─────────
+  // Fire-and-forget; doesn't block the cognition flow.
+  sendReaction(chatId, incomingMessageId, '👀');
 
   // ── Save user message + run cognition ────────────────────────────────────
   await db.addMessage(book.id, 'user', text);
@@ -140,17 +203,24 @@ async function handleIncomingWebhook(payload) {
   await db.addMessage(book.id, 'assistant', reply);
   await db.updateBook(book.id, {});
 
-  // ── Send reply back via Green API ────────────────────────────────────────
-  await sendReply(chatId, reply);
+  // ── Format reply for WhatsApp + send as quote-reply to original message ──
+  const formatted = formatForWhatsApp(reply);
+  await sendReply(chatId, formatted, incomingMessageId);
 
   eventLog.log({
     type: 'whatsapp_sent',
     bookId: book.id,
     agent: 'whatsapp',
-    payload: { to: phone, replyLength: reply.length, chatId }
+    payload: {
+      to: phone,
+      replyLength: formatted.length,
+      originalLength: reply.length,
+      chatId,
+      quoted: !!incomingMessageId
+    }
   });
 
   return { status: 'sent', bookId: book.id };
 }
 
-module.exports = { handleIncomingWebhook, sendReply, normalizePhone };
+module.exports = { handleIncomingWebhook, sendReply, sendReaction, normalizePhone, formatForWhatsApp };

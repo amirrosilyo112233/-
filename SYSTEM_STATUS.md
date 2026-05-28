@@ -17,7 +17,9 @@
 | Module | Status | Phase | Dependencies | Runtime Ready | Known Issues | Next Step |
 |---|---|---|---|---|---|---|
 | `backend/server.js` (Express) | `WORKING` | host | express, multer, cors | yes | none | — |
-| `backend/whatsapp.js` (Green API integration) | `WORKING` | host | db, cognition/coordinator, event_log | code complete; needs live env+token to exercise | — | user provides env vars on Render, configures Green API webhook URL |
+| `backend/whatsapp.js` (Green API integration) | `WORKING` | host | db, cognition/coordinator, event_log | yes — verified live | — | — |
+| `backend/whatsapp.js` formatter + reactions | `WORKING` | host | — | yes | formats markdown→WhatsApp, sends 👀 ack reaction, quote-reply | — |
+| `backend/tutor-style.js` (prompt) | `WORKING` | host | — | yes | added system-identity + "is-not" prohibitions + "translate language, not simplify" rule | — |
 | `backend/db.js` (Postgres + JSON fallback) | `WORKING` | host | pg | yes | JSON fallback paths untested under load | — |
 | `backend/tutor-style.js` (buildPrompt) | `WORKING` | host | none | yes | giant single prompt — to be decomposed by Routing+Teacher in Phase 2 | replace usage in Teacher when Phase 2 templates land |
 | `backend/tutor-prompt.js` (legacy) | `NEEDS_REFACTOR` | host | none | unused | dead file | delete in cleanup pass |
