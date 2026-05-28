@@ -118,6 +118,8 @@ async function initSchema() {
   await q(`ALTER TABLE books ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ`);
   // Track which book the user is actively learning (for WhatsApp routing)
   await q(`ALTER TABLE profile ADD COLUMN IF NOT EXISTS active_book_id INT`);
+  // Voice reply preference (off by default — user must opt in via /קול command)
+  await q(`ALTER TABLE profile ADD COLUMN IF NOT EXISTS voice_replies BOOLEAN DEFAULT FALSE`);
 
   // ── RAG: learner state ───────────────────────────────────────────────────────
   await q(`
@@ -442,6 +444,20 @@ const db = {
   async setActiveBookId(bookId) {
     if (useDb) {
       await q('UPDATE profile SET active_book_id=$1, updated_at=NOW() WHERE id=1', [bookId ? parseInt(bookId) : null]);
+    }
+  },
+
+  async getVoicePref() {
+    if (useDb) {
+      const rows = await q('SELECT voice_replies FROM profile WHERE id=1');
+      return rows[0]?.voice_replies === true;
+    }
+    return false;
+  },
+
+  async setVoicePref(on) {
+    if (useDb) {
+      await q('UPDATE profile SET voice_replies=$1, updated_at=NOW() WHERE id=1', [!!on]);
     }
   },
 

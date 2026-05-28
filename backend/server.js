@@ -95,17 +95,19 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
 
     res.json({ id: book.id, title: book.title, filesProcessed: files.length });
 
-    // Background: build RAG index (fire-and-forget — don't block response)
-    if (content.length > 100) {
-      knowledgeMap.ingest(book.id, content).catch(e =>
-        console.error('[server] RAG ingestion error:', e.message)
-      );
-    }
-
-    // Notify via WhatsApp (fire-and-forget)
+    // Notify upload complete
     whatsapp.notifyUser(
-      `📚 *${book.title}* עלה בהצלחה דרך האתר!\n${files.length} קבצים עובדו. מסדר עכשיו את אינדקס החיפוש — בעוד כמה דקות הבוט יוכל לצטט מהספר בדיוק.`
+      `📚 *${book.title}* עלה בהצלחה!\n${files.length} קבצים עובדו. מסדר עכשיו אינדקס...`
     );
+
+    // Background: build RAG index → notify when ready
+    if (content.length > 100) {
+      knowledgeMap.ingest(book.id, content)
+        .then(() => whatsapp.notifyUser(
+          `✅ *${book.title}* מוכן ללמידה!\nאני יודע לצטט מהחומר בדיוק. תוכל לשאול אותי משהו עליו.`
+        ))
+        .catch(e => console.error('[server] RAG ingestion error:', e.message));
+    }
   } catch (err) {
     console.error('Upload error:', err.message);
     res.status(500).json({ error: err.message });

@@ -354,6 +354,19 @@ async function tryCommand(chatId, text, incomingMessageId) {
     return true;
   }
 
+  // Toggle voice replies on
+  if (/^(\/?קול|\/?voice|ענה\s+ב?קול)\b/i.test(lc)) {
+    await db.setVoicePref(true);
+    await sendReply(chatId, `🔊 מצב קולי *פעיל*. כשתשלח לי הודעה קולית — אענה בקול. הודעות טקסט יישארו טקסט.\n\nלכיבוי שלח: */טקסט*`, incomingMessageId);
+    return true;
+  }
+  // Toggle voice replies off
+  if (/^(\/?טקסט|\/?text|ענה\s+ב?טקסט|בלי\s+קול)\b/i.test(lc)) {
+    await db.setVoicePref(false);
+    await sendReply(chatId, `📝 מצב טקסט בלבד. אענה רק בכתב.\n\nלהפעלת קול שלח: */קול*`, incomingMessageId);
+    return true;
+  }
+
   // Reindex: "/אינדקס N" or "/reindex N"
   const reindexMatch = t.match(/^(?:\/?אינדקס|\/?reindex|\/?index)\s+(\d+)\b/i);
   if (reindexMatch) {
@@ -462,14 +475,16 @@ async function handleIncomingWebhook(payload) {
       const book = await db.addBook({ title, language: 'en', content });
 
       await sendReply(chatId,
-        `📚 *${book.title}* עלה בהצלחה!\n\nמסדר עכשיו את אינדקס החיפוש — בעוד כמה דקות תוכל לשאול אותי שאלות מהחומר ואני אצטט בדיוק.`,
+        `📚 *${book.title}* עלה בהצלחה!\n\nמסדר עכשיו אינדקס...`,
         incomingMessageId
       );
-      // Background RAG ingestion
+      // Background RAG ingestion → notify on completion
       if (content.length > 100) {
-        knowledgeMap.ingest(book.id, content).catch(e =>
-          console.error('[whatsapp] RAG ingestion error:', e.message)
-        );
+        knowledgeMap.ingest(book.id, content)
+          .then(() => sendReply(chatId,
+            `✅ *${book.title}* מוכן ללמידה!\nאני יודע לצטט מהחומר בדיוק. תוכל לשאול אותי משהו עליו.`
+          ))
+          .catch(e => console.error('[whatsapp] RAG ingestion error:', e.message));
       }
       eventLog.log({ type: 'whatsapp_book_uploaded', agent: 'whatsapp', bookId: book.id, payload: { from: phone, title: book.title, fileName } });
       return { status: 'book_uploaded', bookId: book.id };
@@ -547,8 +562,11 @@ async function handleIncomingWebhook(payload) {
   // ── Format + decide delivery mode ─────────────────────────────────────────
   const formatted = formatForWhatsApp(reply);
 
-  // If the user spoke to us, speak back. Otherwise reply in text (chunked).
-  if (voiceMeta) {
+  // Voice replies require explicit opt-in via /קול command (default off)
+  const voicePrefOn = await db.getVoicePref();
+
+  // Speak back ONLY if (a) user spoke AND (b) opted in
+  if (voiceMeta && voicePrefOn) {
     try {
       const v = await sendVoiceReply(chatId, formatted, incomingMessageId);
       eventLog.log({
