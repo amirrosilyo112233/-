@@ -117,6 +117,35 @@ app.delete('/api/books/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Manually trigger RAG ingestion on an existing book.
+app.post('/api/books/:id/reindex', async (req, res) => {
+  try {
+    const book = await db.getBook(req.params.id);
+    if (!book) return res.status(404).json({ error: 'ספר לא נמצא' });
+    if (!book.content || book.content.length < 100) {
+      return res.status(400).json({ error: 'אין מספיק תוכן לאנדקס' });
+    }
+    res.json({ status: 'started', bookId: book.id, title: book.title });
+    knowledgeMap.ingest(book.id, book.content).catch(e =>
+      console.error('[server] reindex error:', e.message)
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Set the active book for the WhatsApp router.
+app.put('/api/books/:id/activate', async (req, res) => {
+  try {
+    const book = await db.getBook(req.params.id);
+    if (!book) return res.status(404).json({ error: 'ספר לא נמצא' });
+    await db.setActiveBookId(book.id);
+    res.json({ ok: true, activeBookId: book.id, title: book.title });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 app.get('/api/books/:id/messages', async (req, res) => {
   res.json(await db.getMessages(req.params.id));

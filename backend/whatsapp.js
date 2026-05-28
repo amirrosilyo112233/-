@@ -195,13 +195,107 @@ async function sendReaction(chatId, messageId, emoji) {
 }
 
 /**
- * Pick the user's active book — the most recently updated one.
- * In single-user MVP, this is almost always "the book they were last using".
+ * Pick the user's active book.
+ * Priority: profile.active_book_id (explicit) → most recently updated book.
  */
 async function pickActiveBook() {
+  const explicitId = await db.getActiveBookId();
+  if (explicitId) {
+    const book = await db.getBook(explicitId);
+    if (book) return book;
+  }
   const books = await db.getBooks();
   if (!books || books.length === 0) return null;
-  return await db.getBook(books[0].id); // getBooks returns sorted by updated_at DESC
+  return await db.getBook(books[0].id);
+}
+
+/**
+ * Format a status overview of all books for WhatsApp.
+ */
+async function formatBooksOverview() {
+  const books = await db.getBooks();
+  const activeId = await db.getActiveBookId();
+  if (!books || books.length === 0) {
+    return '📚 הספרייה ריקה. תעלה PDF דרך הוואטסאפ הזה או דרך האתר ונתחיל.';
+  }
+
+  const lines = ['📚 *הספרייה שלך:*\n'];
+  books.forEach((b, idx) => {
+    const num = idx + 1;
+    const isActive = b.id === activeId || (!activeId && idx === 0);
+    const indexed = b.indexed_at ? '✅ אינדקס מוכן' : '⏳ אינדקס בעיבוד';
+    const topics = Array.isArray(b.completed_topics) ? b.completed_topics
+      : (typeof b.completed_topics === 'string' ? JSON.parse(b.completed_topics || '[]') : []);
+    const topicsLine = topics.length > 0 ? `📖 ${topics.length} נושאים נלמדו` : '📖 התחלה';
+    const where = b.current_chapter ? `📍 ${b.current_chapter}` : '';
+    const star = isActive ? '👈 *פעיל*' : '';
+    lines.push(`*${num}. ${b.title}* ${star}`);
+    lines.push(`   ${indexed}`);
+    lines.push(`   ${topicsLine}`);
+    if (where) lines.push(`   ${where}`);
+    lines.push('');
+  });
+
+  lines.push('---');
+  lines.push('כדי להחליף ספר פעיל: */ספר 2* (לפי המספר)');
+  lines.push('כדי לאנדקס ספר שעדיין לא מוכן: */אינדקס 1*');
+
+  return lines.join('\n');
+}
+
+/**
+ * Try to handle the message as a command. Returns true if handled.
+ */
+async function tryCommand(chatId, text, incomingMessageId) {
+  const t = (text || '').trim();
+  if (!t) return false;
+
+  const lc = t.toLowerCase();
+
+  // Help / list books
+  if (/^(\/?ספרים|\/?רשימה|\/?ספריה|איזה ספרים|מה יש לי|איפה אנחנו|\/list|\/books|\/help)\b/i.test(lc)) {
+    const overview = await formatBooksOverview();
+    await sendReply(chatId, overview, incomingMessageId);
+    return true;
+  }
+
+  // Switch active book: "/ספר N" or "/book N" or "עבור ל N"
+  const switchMatch = t.match(/^(?:\/?ספר|\/?book|עבור\s*ל-?)\s+(\d+)\b/i);
+  if (switchMatch) {
+    const idx = parseInt(switchMatch[1], 10) - 1;
+    const books = await db.getBooks();
+    if (idx < 0 || idx >= books.length) {
+      await sendReply(chatId, `❌ אין ספר במספר ${idx + 1}. שלח */ספרים* כדי לראות את הרשימה.`, incomingMessageId);
+      return true;
+    }
+    const target = books[idx];
+    await db.setActiveBookId(target.id);
+    await sendReply(chatId, `✅ עברנו ל-*${target.title}*. כל שאלה שתשאל מכאן והלאה תופנה לספר הזה.`, incomingMessageId);
+    return true;
+  }
+
+  // Reindex: "/אינדקס N" or "/reindex N"
+  const reindexMatch = t.match(/^(?:\/?אינדקס|\/?reindex|\/?index)\s+(\d+)\b/i);
+  if (reindexMatch) {
+    const idx = parseInt(reindexMatch[1], 10) - 1;
+    const books = await db.getBooks();
+    if (idx < 0 || idx >= books.length) {
+      await sendReply(chatId, `❌ אין ספר במספר ${idx + 1}.`, incomingMessageId);
+      return true;
+    }
+    const target = await db.getBook(books[idx].id);
+    if (!target.content || target.content.length < 100) {
+      await sendReply(chatId, `❌ אין מספיק תוכן בספר *${target.title}* כדי לאנדקס.`, incomingMessageId);
+      return true;
+    }
+    await sendReply(chatId, `🔄 מתחיל לאנדקס את *${target.title}*. זה ירוץ ברקע, ייקח 2-5 דקות. אחר כך הוא יציין מהקטעים בדיוק.`, incomingMessageId);
+    knowledgeMap.ingest(target.id, target.content).catch(e =>
+      console.error('[whatsapp] manual reindex error:', e.message)
+    );
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -309,6 +403,13 @@ async function handleIncomingWebhook(payload) {
   if (!text) {
     eventLog.log({ type: 'whatsapp_skipped', agent: 'whatsapp', payload: { reason: 'no_text', from: phone, typeMessage: m?.typeMessage } });
     return { status: 'skipped', reason: 'unsupported message type' };
+  }
+
+  // ── Try command handlers BEFORE running cognition ────────────────────────
+  // /ספרים, /ספר N, /אינדקס N, etc.
+  if (await tryCommand(chatId, text, incomingMessageId)) {
+    eventLog.log({ type: 'whatsapp_command', agent: 'whatsapp', payload: { from: phone, text: text.substring(0, 60) } });
+    return { status: 'command_handled' };
   }
 
   // ── Whitelist gate ───────────────────────────────────────────────────────

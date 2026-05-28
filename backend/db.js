@@ -116,6 +116,8 @@ async function initSchema() {
   `);
   // Add indexed_at to books (marks when RAG indexing finished)
   await q(`ALTER TABLE books ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ`);
+  // Track which book the user is actively learning (for WhatsApp routing)
+  await q(`ALTER TABLE profile ADD COLUMN IF NOT EXISTS active_book_id INT`);
 
   // ── RAG: learner state ───────────────────────────────────────────────────────
   await q(`
@@ -426,6 +428,21 @@ const db = {
     qa.push(item);
     jSave('chapter_qa', qa);
     return item;
+  },
+
+  // ── Active book selection (per-user, simple: profile-level) ──────────────────
+  async getActiveBookId() {
+    if (useDb) {
+      const rows = await q('SELECT active_book_id FROM profile WHERE id=1');
+      return rows[0]?.active_book_id || null;
+    }
+    return null;
+  },
+
+  async setActiveBookId(bookId) {
+    if (useDb) {
+      await q('UPDATE profile SET active_book_id=$1, updated_at=NOW() WHERE id=1', [bookId ? parseInt(bookId) : null]);
+    }
   },
 
   // ── RAG: knowledge chunks ────────────────────────────────────────────────────
