@@ -20,6 +20,7 @@ app.use(express.json({ limit: '500mb' }));
 
 const { buildPrompt } = require('./tutor-style');
 const coordinator = require('./cognition/coordinator');
+const whatsapp = require('./whatsapp');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
@@ -311,6 +312,22 @@ app.post('/api/tts', async (req, res) => {
 app.get('/api/insights', async (req, res) => res.json(await db.getInsights()));
 app.get('/api/scripts', async (req, res) => res.json(await db.getScripts()));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// ── WhatsApp webhook (Green API) ──────────────────────────────────────────────
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  // Acknowledge immediately so Green API doesn't retry on slow LLM calls.
+  res.status(200).json({ ok: true });
+  try {
+    const result = await whatsapp.handleIncomingWebhook(req.body);
+    if (result?.status === 'sent') {
+      console.log(`[whatsapp] reply sent for book ${result.bookId}`);
+    } else if (result?.status === 'skipped') {
+      console.log(`[whatsapp] skipped: ${result.reason}`);
+    }
+  } catch (err) {
+    console.error('[whatsapp] webhook handler error:', err.message);
+  }
+});
 
 // ── Telemetry: cognition runtime events ───────────────────────────────────────
 // Auth-gated; requires DEBUG_KEY env var to be set. GET /api/events?key=...&limit=100
