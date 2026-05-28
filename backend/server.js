@@ -21,6 +21,7 @@ app.use(express.json({ limit: '500mb' }));
 const { buildPrompt } = require('./tutor-style');
 const coordinator = require('./cognition/coordinator');
 const whatsapp = require('./whatsapp');
+const { extractContent } = require('./bookProcessor');
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 app.get('/api/profile', async (req, res) => res.json(await db.getProfile()));
@@ -92,6 +93,11 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
     });
 
     res.json({ id: book.id, title: book.title, filesProcessed: files.length });
+
+    // Notify via WhatsApp (fire-and-forget)
+    whatsapp.notifyUser(
+      `📚 *${book.title}* עלה בהצלחה דרך האתר!\n${files.length} קבצים עובדו. תוכל לשאול אותי עליו עכשיו בוואטסאפ.`
+    );
   } catch (err) {
     console.error('Upload error:', err.message);
     res.status(500).json({ error: err.message });

@@ -15,6 +15,7 @@ const db = require('./db');
 const coordinator = require('./cognition/coordinator');
 const eventLog = require('./cognition/event_log');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { extractContent } = require('./bookProcessor');
 
 // Lazy Gemini client for voice transcription (host code — not via llm_adapter)
 let _gemini = null;
@@ -264,6 +265,40 @@ async function handleIncomingWebhook(payload) {
     }
   }
 
+  // ── Document upload (PDF / image / txt) ─────────────────────────────────
+  if (!text && (m?.typeMessage === 'documentMessage' || m?.typeMessage === 'imageMessage')) {
+    const fd = m.fileMessageData || m.imageMessageData || {};
+    const downloadUrl = fd.downloadUrl;
+    const fileName = fd.fileName || (m.typeMessage === 'imageMessage' ? 'image.jpg' : 'document.pdf');
+
+    if (!downloadUrl) {
+      eventLog.log({ type: 'whatsapp_skipped', agent: 'whatsapp', payload: { reason: 'doc_no_url', from: phone } });
+      return { status: 'skipped', reason: 'document without download url' };
+    }
+
+    sendReaction(chatId, incomingMessageId, '📚');
+    try {
+      const fileRes = await fetch(downloadUrl);
+      if (!fileRes.ok) throw new Error(`download failed: ${fileRes.status}`);
+      const buf = Buffer.from(await fileRes.arrayBuffer());
+      const content = await extractContent(buf, fileName);
+
+      const title = fileName.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').trim() || 'ספר חדש';
+      const book = await db.addBook({ title, language: 'en', content });
+
+      await sendReply(chatId,
+        `📚 *${book.title}* עלה בהצלחה!\n\nהספר שמור ואפשר להתחיל ללמוד. תוכל לפנות לאתר לפתוח שיחה, או לשאול אותי עכשיו משהו מהחומר.`,
+        incomingMessageId
+      );
+      eventLog.log({ type: 'whatsapp_book_uploaded', agent: 'whatsapp', bookId: book.id, payload: { from: phone, title: book.title, fileName } });
+      return { status: 'book_uploaded', bookId: book.id };
+    } catch (err) {
+      await sendReply(chatId, `⚠️ לא הצלחתי לעבד את הקובץ: ${err.message.substring(0, 100)}. נסה שוב או העלה דרך האתר.`, incomingMessageId);
+      eventLog.log({ type: 'whatsapp_upload_failed', agent: 'whatsapp', payload: { from: phone, error: err.message } });
+      return { status: 'skipped', reason: 'document processing failed' };
+    }
+  }
+
   if (!text) {
     eventLog.log({ type: 'whatsapp_skipped', agent: 'whatsapp', payload: { reason: 'no_text', from: phone, typeMessage: m?.typeMessage } });
     return { status: 'skipped', reason: 'unsupported message type' };
@@ -351,4 +386,20 @@ async function handleIncomingWebhook(payload) {
   return { status: 'sent', bookId: book.id };
 }
 
-module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, normalizePhone, formatForWhatsApp, splitForWhatsApp };
+/**
+ * Send a notification to the first number in the whitelist.
+ * Used by server.js to notify the user when a web-app upload completes.
+ * Fire-and-forget — failures are logged but not thrown.
+ */
+async function notifyUser(text) {
+  try {
+    const { whitelist } = cfg();
+    if (!whitelist.length) return;
+    const chatId = whitelist[0] + '@c.us';
+    await sendReply(chatId, text);
+  } catch (e) {
+    console.warn('[whatsapp] notifyUser failed:', e.message);
+  }
+}
+
+module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, notifyUser, normalizePhone, formatForWhatsApp, splitForWhatsApp };
