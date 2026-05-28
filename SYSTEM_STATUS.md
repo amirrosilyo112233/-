@@ -137,7 +137,10 @@ Each chat turn emits these events to the `events` table:
 | 3b | `teacher_failed` (alt) | coordinator | `error`, `latencyMs` |
 | 4 | `chat_completed` | coordinator | total `latencyMs` |
 
-No reader/dashboard exists for these events yet. Inspect via SQL:
+**Read path (telemetry):** `GET /api/events?key=$DEBUG_KEY&limit=100` returns the most recent events as JSON.
+Requires `DEBUG_KEY` env var on the server. Returns 503 if not configured, 401 if mismatch.
+
+Direct SQL inspection:
 ```sql
 SELECT created_at, type, agent, latency_ms, payload FROM events ORDER BY id DESC LIMIT 50;
 ```
@@ -210,6 +213,7 @@ Boundary invariants enforced by convention:
 - [x] No UI changes
 - [x] No other endpoint changes
 - [ ] Verified end-to-end against live Render — **PENDING USER TEST**
+- [x] `/api/events` telemetry endpoint (auth-gated by `DEBUG_KEY`)
 
 ### Phase 2 — Cognition activation (NOT_STARTED)
 

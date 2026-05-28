@@ -312,6 +312,21 @@ app.get('/api/insights', async (req, res) => res.json(await db.getInsights()));
 app.get('/api/scripts', async (req, res) => res.json(await db.getScripts()));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// ── Telemetry: cognition runtime events ───────────────────────────────────────
+// Auth-gated; requires DEBUG_KEY env var to be set. GET /api/events?key=...&limit=100
+app.get('/api/events', async (req, res) => {
+  try {
+    const expected = process.env.DEBUG_KEY;
+    if (!expected) return res.status(503).json({ error: 'DEBUG_KEY not configured' });
+    if (req.query.key !== expected) return res.status(401).json({ error: 'unauthorized' });
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const events = await db.getRecentEvents(limit);
+    res.json({ count: events.length, events });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // In production, serve the built frontend
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
