@@ -19,6 +19,7 @@
 | `backend/server.js` (Express) | `WORKING` | host | express, multer, cors | yes | none | — |
 | `backend/whatsapp.js` (Green API integration) | `WORKING` | host | db, cognition/coordinator, event_log | yes — verified live | — | — |
 | `backend/whatsapp.js` formatter + reactions | `WORKING` | host | — | yes | formats markdown→WhatsApp, sends 👀 ack reaction, quote-reply | — |
+| `backend/whatsapp.js` voice input | `WORKING` | host | @google/generative-ai (Gemini Flash audio) | code complete; needs live test | transcribes audioMessage/pttMessage to Hebrew text, feeds into coordinator | user sends voice note to test |
 | `backend/tutor-style.js` (prompt) | `WORKING` | host | — | yes | added system-identity + "is-not" prohibitions + "translate language, not simplify" rule | — |
 | `backend/db.js` (Postgres + JSON fallback) | `WORKING` | host | pg | yes | JSON fallback paths untested under load | — |
 | `backend/tutor-style.js` (buildPrompt) | `WORKING` | host | none | yes | giant single prompt — to be decomposed by Routing+Teacher in Phase 2 | replace usage in Teacher when Phase 2 templates land |

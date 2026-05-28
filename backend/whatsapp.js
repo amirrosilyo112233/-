@@ -14,6 +14,14 @@
 const db = require('./db');
 const coordinator = require('./cognition/coordinator');
 const eventLog = require('./cognition/event_log');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Lazy Gemini client for voice transcription (host code — not via llm_adapter)
+let _gemini = null;
+function gemini() {
+  if (!_gemini) _gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  return _gemini;
+}
 
 // ── Config from env ──────────────────────────────────────────────────────────
 function cfg() {
@@ -97,6 +105,31 @@ async function sendReply(chatId, text, quotedMessageId) {
 }
 
 /**
+ * Download an audio file from a URL and transcribe it to Hebrew text via Gemini.
+ * Returns the transcript or throws.
+ * @param {string} downloadUrl
+ * @param {string} [mimeType]   defaults to 'audio/ogg' (WhatsApp PTT format)
+ * @returns {Promise<{ text: string, durationMs: number, mimeType: string, sizeBytes: number }>}
+ */
+async function transcribeAudio(downloadUrl, mimeType) {
+  const t0 = Date.now();
+  const res = await fetch(downloadUrl);
+  if (!res.ok) throw new Error(`download failed: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const sizeBytes = buf.length;
+  const detectedMime = mimeType || res.headers.get('content-type')?.split(';')[0]?.trim() || 'audio/ogg';
+  const base64 = buf.toString('base64');
+
+  const model = gemini().getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const result = await model.generateContent([
+    { inlineData: { data: base64, mimeType: detectedMime } },
+    'תמלל את ההקלטה הזו לעברית בלבד. החזר אך ורק את הטקסט המדויק שנאמר — בלי הסברים, בלי כותרות, בלי הערות שלך. אם ההקלטה ריקה או לא מובנת, החזר את המחרוזת "[לא ברור]".'
+  ]);
+  const text = (result.response.text() || '').trim();
+  return { text, durationMs: Date.now() - t0, mimeType: detectedMime, sizeBytes };
+}
+
+/**
  * Send a reaction emoji to a specific message via Green API.
  * Fire-and-forget; failures are logged but do not propagate.
  */
@@ -147,11 +180,46 @@ async function handleIncomingWebhook(payload) {
   const chatId = payload.senderData?.chatId; // we reply to the same chatId
   const incomingMessageId = payload.idMessage; // for quote-reply + ack-reaction
 
-  // Extract text content (only text messages in MVP)
+  // ── Extract content (text directly, or voice → transcribe) ──────────────
   let text = null;
+  let voiceMeta = null; // populated when message was a voice note
   const m = payload.messageData;
-  if (m?.typeMessage === 'textMessage') text = m.textMessageData?.textMessage;
-  else if (m?.typeMessage === 'extendedTextMessage') text = m.extendedTextMessageData?.text;
+
+  if (m?.typeMessage === 'textMessage') {
+    text = m.textMessageData?.textMessage;
+  } else if (m?.typeMessage === 'extendedTextMessage') {
+    text = m.extendedTextMessageData?.text;
+  } else if (m?.typeMessage === 'audioMessage' || m?.typeMessage === 'pttMessage') {
+    // Voice note — download + transcribe via Gemini
+    const fd = m.fileMessageData || {};
+    const downloadUrl = fd.downloadUrl;
+    const mimeType = fd.mimeType;
+    if (!downloadUrl) {
+      eventLog.log({ type: 'whatsapp_skipped', agent: 'whatsapp', payload: { reason: 'audio_no_url', from: phone, typeMessage: m.typeMessage } });
+      return { status: 'skipped', reason: 'audio without download url' };
+    }
+    // Instant ack so user knows the bot is processing the voice note
+    sendReaction(chatId, incomingMessageId, '🎙️');
+    try {
+      const t = await transcribeAudio(downloadUrl, mimeType);
+      text = t.text;
+      voiceMeta = { durationMs: t.durationMs, mimeType: t.mimeType, sizeBytes: t.sizeBytes };
+      eventLog.log({
+        type: 'voice_transcribed',
+        agent: 'whatsapp',
+        payload: { from: phone, sizeBytes: t.sizeBytes, mimeType: t.mimeType, transcriptLength: text.length },
+        latencyMs: t.durationMs
+      });
+      if (!text || text === '[לא ברור]') {
+        await sendReply(chatId, '🎙️ שמעתי את ההודעה אבל לא הצלחתי להבין. נסה שוב או כתוב בטקסט.', incomingMessageId);
+        return { status: 'skipped', reason: 'unclear voice' };
+      }
+    } catch (err) {
+      eventLog.log({ type: 'voice_failed', agent: 'whatsapp', payload: { from: phone, error: err.message } });
+      await sendReply(chatId, '🎙️ ניסיתי לתמלל אבל לא הצלחתי. נסה שוב או כתוב בטקסט.', incomingMessageId);
+      return { status: 'skipped', reason: 'transcription failed' };
+    }
+  }
 
   if (!text) {
     eventLog.log({ type: 'whatsapp_skipped', agent: 'whatsapp', payload: { reason: 'no_text', from: phone, typeMessage: m?.typeMessage } });
@@ -180,11 +248,18 @@ async function handleIncomingWebhook(payload) {
     type: 'whatsapp_received',
     bookId: book.id,
     agent: 'whatsapp',
-    payload: { from: phone, messageLength: text.length, chatId, idMessage: incomingMessageId }
+    payload: {
+      from: phone,
+      messageLength: text.length,
+      chatId,
+      idMessage: incomingMessageId,
+      source: voiceMeta ? 'voice' : 'text',
+      voice: voiceMeta || undefined
+    }
   });
 
   // ── Instant ack reaction so the user knows the bot is "thinking" ─────────
-  // Fire-and-forget; doesn't block the cognition flow.
+  // (For voice, we already sent 🎙️ above; this 👀 indicates cognition started.)
   sendReaction(chatId, incomingMessageId, '👀');
 
   // ── Save user message + run cognition ────────────────────────────────────
@@ -223,4 +298,4 @@ async function handleIncomingWebhook(payload) {
   return { status: 'sent', bookId: book.id };
 }
 
-module.exports = { handleIncomingWebhook, sendReply, sendReaction, normalizePhone, formatForWhatsApp };
+module.exports = { handleIncomingWebhook, sendReply, sendReaction, transcribeAudio, normalizePhone, formatForWhatsApp };
