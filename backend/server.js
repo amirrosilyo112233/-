@@ -38,7 +38,7 @@ app.post('/api/books/upload', upload.array('files', 30), async (req, res) => {
     const files = req.files || [];
     if (files.length === 0) return res.status(400).json({ error: 'לא הועלו קבצים' });
 
-    const visionModel = genAI.getGenerativeModel({ model: 'gemini-3.1-pro' });
+    const visionModel = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const parts = [];
 
     // Process files in the order they arrived (frontend keeps order)
@@ -211,7 +211,7 @@ app.post('/api/field-log', async (req, res) => {
     const { content, book_id } = req.body;
     const book = book_id ? await db.getBook(book_id) : null;
     const prompt = `אמיר כתב: "${content}"\n${book ? `ספר: ${book.title}` : ''}\nתגיב בעברית קצר: שאל שאלת עומק, חבר לחומר, הצע לנסות מחר.`;
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const result = await model.generateContent(prompt);
     const aiResponse = result.response.text();
     await db.addFieldLog(book_id, content, aiResponse);
@@ -259,7 +259,7 @@ ${previousChapters.length > 0 ? `נושאים קודמים שכבר נלמדו: 
 ---גשר---
 [הגשר]`;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
@@ -307,7 +307,7 @@ ${chapter.bridge ? `הקשר לנושאים אחרים:\n${chapter.bridge}` : ''
 
 ענה בעברית, קצר ומדויק, על סמך מה שלמדנו ביחד. אם המשתמש חופר — תאתגר אותו. אם הוא לא הבין משהו — תסביר אחרת.`;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro', systemInstruction: systemPrompt });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro', systemInstruction: systemPrompt });
     const chat = model.startChat({ history });
     const result = await chat.sendMessage(question);
     const reply = result.response.text();

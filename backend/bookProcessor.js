@@ -65,7 +65,7 @@ async function extractContent(buffer, filename, index = 1, total = 1) {
 }
 
 async function visionExtract(buffer, mimeType, prompt) {
-  const model = genAI().getGenerativeModel({ model: 'gemini-3.1-pro' });
+  const model = genAI().getGenerativeModel({ model: 'gemini-2.5-pro' });
   const b64 = buffer.toString('base64');
   const result = await model.generateContent([
     { inlineData: { data: b64, mimeType } },

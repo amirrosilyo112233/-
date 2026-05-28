@@ -6,15 +6,15 @@
  *          that overrides the teacher's default tendency.
  *          When absent (legacy/test calls), behaves exactly like Phase 1.
  *
- * Model: gemini-3.5-flash by default; gemini-3.1-pro for deep moments.
+ * Model: gemini-3.5-flash by default; gemini-2.5-pro for deep moments.
  */
 
 const { buildPrompt } = require('../tutor-style');
 const llm = require('./adapters/llm_adapter');
 
-// Upgraded May 2026: 2.5 → 3.x (faster + cheaper + better Hebrew).
+// May 2026: Flash → 3.5 (verified working); Pro stays 2.5 (3.1-pro returned 404).
 const DEFAULT_MODEL = 'gemini-3.5-flash';
-const DEEP_MODEL = 'gemini-3.1-pro';
+const DEEP_MODEL = 'gemini-2.5-pro';
 const PROVIDER = 'gemini';
 // Back-compat export for older callers.
 const MODEL = DEFAULT_MODEL;
