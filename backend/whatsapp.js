@@ -323,14 +323,14 @@ async function handleIncomingWebhook(payload) {
 
   // ── Format + split + send ─────────────────────────────────────────────────
   const formatted = formatForWhatsApp(reply);
-  const chunks = splitForWhatsApp(formatted); // split at 1300 chars
+  const chunks = splitForWhatsApp(formatted, 900); // ~8 lines per message on mobile
 
   // First chunk: quote-reply to the original message
   await sendReply(chatId, chunks[0], incomingMessageId);
 
-  // Subsequent chunks: plain follow-up messages (short delay between each)
+  // Subsequent chunks: plain follow-up, 800ms apart so they arrive as a readable sequence
   for (let i = 1; i < chunks.length; i++) {
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
     await sendReply(chatId, chunks[i]);
   }
 
