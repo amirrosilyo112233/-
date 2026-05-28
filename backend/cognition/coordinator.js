@@ -78,13 +78,20 @@ async function handleChatMessage(req) {
     payload: { strategy: decision.strategy, ruleId: decision.ruleId, signal: pseudo.signal, depth: pseudo.depth }
   });
 
-  // ── 3. Teacher: generate the reply, guided by the strategy ────────────────
+  // ── 3. Teacher: generate the reply, guided by the strategy + hybrid model ─
   const teacherStart = Date.now();
+  // Pre-compute model choice for the invocation event (teacher will redo this
+  // internally, but emitting upfront makes telemetry order intuitive).
+  const modelChoice = teacher.pickModel({ pseudo, userMessage, recentMessages });
   eventLog.log({
     type: 'teacher_invoked',
     bookId,
     agent: 'teacher',
-    payload: { model: teacher.MODEL, strategy: decision.strategy }
+    payload: {
+      model: modelChoice.model,
+      modelReason: modelChoice.reason,
+      strategy: decision.strategy
+    }
   });
 
   let replyText;
@@ -92,7 +99,8 @@ async function handleChatMessage(req) {
     const result = await teacher.respond({
       profile, book, recentMessages, userMessage,
       strategy: decision.strategy,
-      instruction: decision.instruction
+      instruction: decision.instruction,
+      pseudo
     });
     replyText = result.replyText;
 
@@ -103,6 +111,7 @@ async function handleChatMessage(req) {
       payload: {
         replyLength: replyText.length,
         model: result.meta.model,
+        modelReason: result.meta.modelReason,
         historyLength: result.meta.historyLength,
         strategy: result.meta.strategy
       },
@@ -113,7 +122,7 @@ async function handleChatMessage(req) {
       type: 'teacher_failed',
       bookId,
       agent: 'teacher',
-      payload: { error: err.message, strategy: decision.strategy },
+      payload: { error: err.message, strategy: decision.strategy, model: modelChoice.model },
       latencyMs: Date.now() - teacherStart
     });
     throw err;

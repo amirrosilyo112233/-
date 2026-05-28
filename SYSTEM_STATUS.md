@@ -58,8 +58,8 @@
 
 | Provider | Status | Phase | Used by | Notes |
 |---|---|---|---|---|
-| Gemini 2.5 Flash | `WORKING` | 1 | Teacher | live chat replies |
-| Gemini 2.5 Pro | `WORKING` | host | Vision (upload), chapter summary, chapter QA, field log | unchanged |
+| Gemini 2.5 Flash | `WORKING` | 1 | Teacher (default ~85% of turns) | fast routine replies |
+| Gemini 2.5 Pro | `WORKING` | 2 | Teacher (~15% — deep moments), Vision, chapter summary, chapter QA, field log | hybrid selection via `teacher.pickModel()`: genuine+d3, first turn, long substantive |
 | OpenAI GPT-4o-mini | `WORKING` | 2 | Anti-Pseudo | `OPENAI_API_KEY` set on Render; JSON mode used |
 | OpenAI text-embedding-3-large | `NOT_STARTED` | 3 | Knowledge Map | only when embeddings retrieval lands |
 
