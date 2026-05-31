@@ -351,8 +351,10 @@ async function tryCommand(chatId, text, incomingMessageId, phone) {
     // No pending comparison → fall through; user might have meant something else.
   }
 
-  // ── A/B comparison: /השווה [pro|שיעור] <text>
-  const compareMatch = t.match(/^\/?(?:השווה|compare)(?:\s+(pro|שיעור|lesson))?\s+([\s\S]+)$/i);
+  // ── A/B comparison: permissive — accepts /השווה, השווה, השוואה, compare,
+  //    optional slash or backslash, optional colon/comma/period/semicolon
+  //    after the command and after the modifier, extra whitespace.
+  const compareMatch = t.match(/^[\/\\]?\s*(?:השווה|השוואה|compare)[\s:,،.;]+(?:(pro|שיעור|lesson)[\s:,،.;]+)?(.+)$/i);
   if (compareMatch && compareMatch[2].trim().length > 2) {
     const modifier = (compareMatch[1] || '').toLowerCase();
     const payload = compareMatch[2].trim();
