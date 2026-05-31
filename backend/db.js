@@ -133,6 +133,32 @@ async function initSchema() {
     );
   `);
 
+  // ── A/B test comparisons (Gemini vs OpenAI) ────────────────────────────────
+  await q(`
+    CREATE TABLE IF NOT EXISTS ab_comparisons (
+      id SERIAL PRIMARY KEY,
+      user_phone TEXT,
+      book_id INT,
+      mode TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'question',
+      user_input TEXT NOT NULL,
+      baseline_provider TEXT,
+      baseline_model TEXT,
+      baseline_text TEXT,
+      baseline_ms INT,
+      baseline_ok BOOLEAN DEFAULT FALSE,
+      challenger_provider TEXT,
+      challenger_model TEXT,
+      challenger_text TEXT,
+      challenger_ms INT,
+      challenger_ok BOOLEAN DEFAULT FALSE,
+      vote INT,
+      voted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ab_user_created ON ab_comparisons(user_phone, created_at DESC);
+  `);
+
   // ── Cognition runtime events ────────────────────────────────────────────────
   await q(`
     CREATE TABLE IF NOT EXISTS events (
@@ -316,6 +342,60 @@ const db = {
     const logs = jLoad('field_log').reverse().slice(0, 30);
     const books = jLoad('books');
     return logs.map(l => ({ ...l, book_title: books.find(b => b.id === l.book_id)?.title || '' }));
+  },
+
+  // ── A/B Test comparisons ─────────────────────────────────────────────────────
+  async addAbComparison({ userPhone, bookId, mode, type, userInput, baseline, challenger }) {
+    if (!useDb) return null;
+    const rows = await q(
+      `INSERT INTO ab_comparisons
+        (user_phone, book_id, mode, type, user_input,
+         baseline_provider, baseline_model, baseline_text, baseline_ms, baseline_ok,
+         challenger_provider, challenger_model, challenger_text, challenger_ms, challenger_ok)
+       VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9,$10, $11,$12,$13,$14,$15)
+       RETURNING id, created_at`,
+      [
+        userPhone || null,
+        bookId ? parseInt(bookId) : null,
+        mode,
+        type || 'question',
+        userInput,
+        baseline?.provider || null,
+        baseline?.model || null,
+        baseline?.text || null,
+        baseline?.ms ?? null,
+        !!baseline?.ok,
+        challenger?.provider || null,
+        challenger?.model || null,
+        challenger?.text || null,
+        challenger?.ms ?? null,
+        !!challenger?.ok
+      ]
+    );
+    return rows[0];
+  },
+
+  async getLatestPendingAb(userPhone, withinMs) {
+    if (!useDb || !userPhone) return null;
+    const rows = await q(
+      `SELECT id, created_at, mode, type
+         FROM ab_comparisons
+        WHERE user_phone = $1
+          AND vote IS NULL
+          AND created_at > NOW() - ($2 || ' milliseconds')::interval
+        ORDER BY id DESC
+        LIMIT 1`,
+      [userPhone, String(withinMs)]
+    );
+    return rows[0] || null;
+  },
+
+  async recordAbVote(abId, vote) {
+    if (!useDb) return;
+    await q(
+      `UPDATE ab_comparisons SET vote = $1, voted_at = NOW() WHERE id = $2`,
+      [parseInt(vote), parseInt(abId)]
+    );
   },
 
   async getRecentFieldLog(limit = 5) {

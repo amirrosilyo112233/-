@@ -30,12 +30,35 @@ function openai() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Normalize a history entry into OpenAI shape `{ role, content }`.
+ * Handles three input shapes:
+ *   1. OpenAI-native:  { role: 'user'|'assistant'|'system', content: 'text' }
+ *   2. Gemini-shaped:  { role: 'user'|'model',              parts: [{ text: 'text' }] }
+ *   3. Mixed / partial — best-effort
+ */
+function toOpenAiMessage(h) {
+  if (!h) return null;
+  const role = h.role === 'model' ? 'assistant' : (h.role || 'user');
+  let content = h.content;
+  if (typeof content !== 'string') {
+    // Try Gemini-shape parts
+    if (Array.isArray(h.parts) && h.parts.length > 0 && typeof h.parts[0].text === 'string') {
+      content = h.parts.map(p => p.text || '').join('');
+    } else {
+      content = '';
+    }
+  }
+  return { role, content };
+}
+
+/**
  * Multi-turn chat call.
  * @param {Object} args
  * @param {'gemini'|'openai'} args.provider
  * @param {string} args.model
  * @param {string} [args.systemInstruction]
- * @param {Array}  [args.history]   Provider-shaped history (caller's responsibility)
+ * @param {Array}  [args.history]   Provider-agnostic for OpenAI; Gemini-shape for Gemini.
+ *                                   The adapter normalizes for OpenAI.
  * @param {string} args.message
  * @returns {Promise<string>}
  */
@@ -47,13 +70,22 @@ async function chat({ provider, model, systemInstruction, history = [], message 
     return result.response.text();
   }
   if (provider === 'openai') {
-    // history here is expected as [{ role: 'user'|'assistant'|'system', content: '...' }, ...]
-    const messages = [];
-    if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
-    for (const h of history) messages.push({ role: h.role, content: h.content });
-    messages.push({ role: 'user', content: message });
-    const resp = await openai().chat.completions.create({ model, messages });
-    return resp.choices[0].message.content;
+    // Uses Responses API (newer endpoint than Chat Completions).
+    // `instructions` = system prompt; `input` = ordered messages array.
+    const input = [];
+    for (const h of history) {
+      const normalized = toOpenAiMessage(h);
+      if (normalized && normalized.content) input.push(normalized);
+    }
+    input.push({ role: 'user', content: message });
+
+    const resp = await openai().responses.create({
+      model,
+      instructions: systemInstruction || undefined,
+      input
+    });
+    // SDK exposes a top-level convenience accessor for the full text output
+    return resp.output_text || '';
   }
   throw new Error(`llm_adapter.chat: provider not implemented: ${provider}`);
 }

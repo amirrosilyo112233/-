@@ -18,6 +18,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { extractContent } = require('./bookProcessor');
 const knowledgeMap = require('./cognition/knowledge_map');
 const lessonPlan = require('./cognition/lesson_plan');
+const abTest = require('./cognition/ab_test');
 const { generate: llmGen } = require('./cognition/adapters/llm_adapter');
 
 // Lazy Gemini client for voice transcription (host code — not via llm_adapter)
@@ -324,6 +325,8 @@ async function formatBooksOverview() {
   lines.push('• */אינדקס 1* — לאנדקס ספר שעדיין לא מוכן');
   lines.push('• */יומן [טקסט]* — להוסיף ליומן השטח');
   lines.push('• */קול* / */טקסט* — להפעיל/לבטל תשובות קוליות');
+  lines.push('• */השווה [שאלה]* — להריץ אותה שאלה ב-Gemini Flash + GPT-5 Mini');
+  lines.push('• */השווה pro [שאלה]* — להריץ ב-Gemini Pro + GPT-5');
 
   return lines.join('\n');
 }
@@ -331,11 +334,81 @@ async function formatBooksOverview() {
 /**
  * Try to handle the message as a command. Returns true if handled.
  */
-async function tryCommand(chatId, text, incomingMessageId) {
+async function tryCommand(chatId, text, incomingMessageId, phone) {
   const t = (text || '').trim();
   if (!t) return false;
 
   const lc = t.toLowerCase();
+
+  // ── A/B vote: bare "1" / "2" / "3" within vote window of a recent comparison
+  if (/^[123]$/.test(t)) {
+    const result = await abTest.recordVote(phone, parseInt(t, 10));
+    if (result.recorded) {
+      const labels = { 1: '🟢 Gemini', 2: '🔵 OpenAI', 3: '⚖️ תיקו' };
+      await sendReply(chatId, `📊 הצבעה נרשמה: ${labels[parseInt(t, 10)]}\n\nתודה — עוזר לנו למדוד איכות לאורך זמן.`, incomingMessageId);
+      return true;
+    }
+    // No pending comparison → fall through; user might have meant something else.
+  }
+
+  // ── A/B comparison: /השווה [pro|שיעור] <text>
+  const compareMatch = t.match(/^\/?(?:השווה|compare)(?:\s+(pro|שיעור|lesson))?\s+([\s\S]+)$/i);
+  if (compareMatch && compareMatch[2].trim().length > 2) {
+    const modifier = (compareMatch[1] || '').toLowerCase();
+    const payload = compareMatch[2].trim();
+    const isLesson = modifier === 'שיעור' || modifier === 'lesson';
+    const mode = modifier === 'pro' ? 'pro' : 'fast';
+    const type = isLesson ? 'lesson' : 'question';
+
+    const activeBook = await pickActiveBook();
+    if (!activeBook) {
+      await sendReply(chatId, '❌ אין ספר פעיל. שלח */ספרים* לרשימה ובחר ספר.', incomingMessageId);
+      return true;
+    }
+
+    sendReaction(chatId, incomingMessageId, '🆎');
+    const baselineLabel = mode === 'pro' ? 'Gemini 2.5 Pro' : 'Gemini 3.5 Flash';
+    const challengerLabel = mode === 'pro' ? 'GPT-5' : 'GPT-5 Mini';
+    await sendReply(chatId,
+      `⏳ מריץ את אותה שאלה ב-${baselineLabel} וגם ב-${challengerLabel}. זה ייקח ${mode === 'pro' ? '20-40' : '10-20'} שניות...`,
+      incomingMessageId
+    );
+
+    const result = await abTest.compareProviders({
+      bookId: activeBook.id, mode, type, payload, userPhone: phone
+    });
+
+    if (!result.ok && result.error) {
+      await sendReply(chatId, `❌ ההשוואה נכשלה: ${result.error}`, incomingMessageId);
+      return true;
+    }
+
+    const formatSide = (icon, label, side) => {
+      if (!side.ok) return `${icon} *${label}* — שגיאה: ${side.error || 'unknown'}`;
+      const head = `${icon} *${label}* _(${(side.ms / 1000).toFixed(1)}s)_`;
+      const formatted = formatForWhatsApp(side.text || '');
+      return `${head}\n\n${formatted}`;
+    };
+
+    // Send baseline first, then challenger
+    const baseChunks = splitForWhatsApp(formatSide('🟢', baselineLabel, result.baseline), 1200);
+    for (let i = 0; i < baseChunks.length; i++) {
+      await sendReply(chatId, baseChunks[i]);
+      if (i < baseChunks.length - 1) await new Promise(r => setTimeout(r, 700));
+    }
+    await new Promise(r => setTimeout(r, 900));
+    const chalChunks = splitForWhatsApp(formatSide('🔵', challengerLabel, result.challenger), 1200);
+    for (let i = 0; i < chalChunks.length; i++) {
+      await sendReply(chatId, chalChunks[i]);
+      if (i < chalChunks.length - 1) await new Promise(r => setTimeout(r, 700));
+    }
+
+    await new Promise(r => setTimeout(r, 700));
+    await sendReply(chatId,
+      `📊 *איזה היה טוב יותר?*\n\nשלח לי:\n• *1* — 🟢 Gemini\n• *2* — 🔵 OpenAI\n• *3* — ⚖️ תיקו\n\n_(עוזר לנו למדוד איכות לאורך זמן)_`
+    );
+    return true;
+  }
 
   // Help / list books
   if (/^(\/?ספרים|\/?רשימה|\/?ספריה|איזה ספרים|מה יש לי|איפה אנחנו|\/list|\/books|\/help)\b/i.test(lc)) {
@@ -554,7 +627,7 @@ async function handleIncomingWebhook(payload) {
 
   // ── Try command handlers BEFORE running cognition ────────────────────────
   // /ספרים, /ספר N, /אינדקס N, etc.
-  if (await tryCommand(chatId, text, incomingMessageId)) {
+  if (await tryCommand(chatId, text, incomingMessageId, phone)) {
     eventLog.log({ type: 'whatsapp_command', agent: 'whatsapp', payload: { from: phone, text: text.substring(0, 60) } });
     return { status: 'command_handled' };
   }
