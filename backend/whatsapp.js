@@ -55,8 +55,33 @@ function normalizePhone(senderId) {
  * @returns {string[]}
  */
 function splitForWhatsApp(text, maxChars = 1300) {
-  if (!text || text.length <= maxChars) return [text];
+  if (!text) return [];
 
+  // HARD SPLIT: layer headers in 5-layer teaching format always start a new bubble.
+  // Pattern matches: **שכבה 1 — ..., **שכבה א' — ..., etc., or with * single-asterisk WhatsApp markdown.
+  const LAYER_HEADER = /(?=\n\s*\*{1,2}\s*שכבה\s)/;
+  const layerSegments = text.split(LAYER_HEADER).map(s => s.trim()).filter(Boolean);
+
+  if (layerSegments.length > 1) {
+    // Teaching response with layer structure — each layer is its own bubble.
+    // For each segment, apply soft-split only if it exceeds maxChars.
+    const allChunks = [];
+    for (const segment of layerSegments) {
+      if (segment.length <= maxChars) {
+        allChunks.push(segment);
+      } else {
+        allChunks.push(...softSplitForWhatsApp(segment, maxChars));
+      }
+    }
+    return allChunks;
+  }
+
+  // No layer markers — fall back to existing paragraph/sentence splitting.
+  if (text.length <= maxChars) return [text];
+  return softSplitForWhatsApp(text, maxChars);
+}
+
+function softSplitForWhatsApp(text, maxChars) {
   const chunks = [];
   const paragraphs = text.split(/\n{2,}/);
   let current = '';
@@ -66,13 +91,11 @@ function splitForWhatsApp(text, maxChars = 1300) {
     if (candidate.length <= maxChars) {
       current = candidate;
     } else {
-      // Flush current buffer if it has content
       if (current) { chunks.push(current.trim()); current = ''; }
 
       if (para.length <= maxChars) {
         current = para;
       } else {
-        // Split oversized paragraph at sentence boundaries
         const parts = para.split(/(?<=[.!?])\s+/);
         for (const part of parts) {
           const cand = current ? current + ' ' + part : part;
