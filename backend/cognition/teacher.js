@@ -72,7 +72,7 @@ async function respond({ profile, book, recentMessages, userMessage, strategy, i
   // *above* the existing buildPrompt. The directive is short and surgical;
   // it overrides the teacher's default verbose tendency for this turn only.
   const systemInstruction = instruction
-    ? `## הוראת אסטרטגיה לתשובה הנוכחית (חובה לציית — גובר על כל ברירת מחדל אחרת)\n${instruction}\n\n---\n\n${basePrompt}`
+    ? `## הוראת אסטרטגיה לתשובה הנוכחית\n${instruction}\n\n(ההוראה הזו מכוונת את הטון והמיקוד של התשובה. היא לעולם אינה מבטלת את מנוע ההוראה ואת חוקי הפתיחה-מחוויה שבפרומפט הראשי — אם יש סתירה, מנוע ההוראה גובר.)\n\n---\n\n${basePrompt}`
     : basePrompt;
 
   // Build provider-shaped history (exclude the last user message — sent separately).
