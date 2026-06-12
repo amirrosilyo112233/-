@@ -57,8 +57,20 @@ function normalizePhone(senderId) {
 function splitForWhatsApp(text, maxChars = 1300) {
   if (!text) return [];
 
-  // HARD SPLIT: layer headers in 5-layer teaching format always start a new bubble.
-  // Pattern matches: **שכבה 1 — ..., **שכבה א' — ..., etc., or with * single-asterisk WhatsApp markdown.
+  // HARD SPLIT 1: explicit bubble separator — a line containing only ⸻ (with optional whitespace).
+  // The teaching prompt instructs the model to mark natural pause points with this character.
+  const SEPARATOR = /\n\s*⸻+\s*(?:\n|$)/;
+  if (SEPARATOR.test(text)) {
+    const parts = text.split(new RegExp(SEPARATOR.source, 'g')).map(s => s.trim()).filter(Boolean);
+    const allChunks = [];
+    for (const part of parts) {
+      if (part.length <= maxChars) allChunks.push(part);
+      else allChunks.push(...softSplitForWhatsApp(part, maxChars));
+    }
+    return allChunks;
+  }
+
+  // HARD SPLIT 2 (legacy): layer headers like **שכבה 1 — ... still force a new bubble.
   const LAYER_HEADER = /(?=\n\s*\*{1,2}\s*שכבה\s)/;
   const layerSegments = text.split(LAYER_HEADER).map(s => s.trim()).filter(Boolean);
 
