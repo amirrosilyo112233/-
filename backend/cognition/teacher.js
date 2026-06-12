@@ -29,7 +29,12 @@ const MODEL = DEFAULT_MODEL;
  * @param {import('./schemas').StoredMessage[]} [args.recentMessages]
  * @returns {{ model: string, reason: string }}
  */
-function pickModel({ pseudo, userMessage, recentMessages }) {
+function pickModel({ pseudo, userMessage, recentMessages, strategy }) {
+  // Full lesson (explicit teach request) — prose quality matters most here.
+  // Flash writes choppy lessons; Pro writes flowing chapters.
+  if (strategy === 'TEACH_MODEL') {
+    return { model: DEEP_MODEL, reason: 'teach_model_lesson' };
+  }
   // Genuine deep understanding — moments worth honoring with quality
   if (pseudo?.signal === 'genuine' && pseudo?.depth >= 3) {
     return { model: DEEP_MODEL, reason: 'genuine_deep' };
@@ -64,7 +69,7 @@ async function respond({ profile, book, recentMessages, userMessage, strategy, i
   const basePrompt = buildPrompt(profile, book, relevantChunks || [], learnerState, { sessionContext, recentFieldEntries });
   const choice = model
     ? { model, reason: 'explicit_override' }
-    : pickModel({ pseudo, userMessage, recentMessages });
+    : pickModel({ pseudo, userMessage, recentMessages, strategy });
   const useModel = choice.model;
 
   // ── Strategic directive ─────────────────────────────────────────────────────
